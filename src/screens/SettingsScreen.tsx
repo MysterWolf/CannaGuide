@@ -3,7 +3,10 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Platform, StatusBar, Alert, Switch, Linking,
 } from 'react-native';
-import { dbGetFirst, dbRun, dbAll, isoNow } from '../db/database';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
+import { dbGetFirst, dbRun, dbAll, isoNow, closeDb, reopenDb } from '../db/database';
 import { C } from '../theme/colors';
 
 const APP_VERSION  = '1.0.0';
@@ -135,6 +138,58 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     Alert.alert('Queued', 'Profile will rebuild next time you open the Recommend tab.');
   }, [user]);
 
+  const handleExportDb = useCallback(async () => {
+    try {
+      const src = FileSystem.documentDirectory + 'SQLite/cannaguide.db';
+      const dst = FileSystem.cacheDirectory + 'cannaguide_backup.db';
+      const info = await FileSystem.getInfoAsync(src);
+      if (!info.exists) { Alert.alert('Error', 'Database file not found.'); return; }
+      await FileSystem.copyAsync({ from: src, to: dst });
+      const available = await Sharing.isAvailableAsync();
+      if (!available) { Alert.alert('Error', 'Sharing not available on this device.'); return; }
+      await Sharing.shareAsync(dst, { mimeType: 'application/octet-stream', dialogTitle: 'Save CannaGuide backup' });
+    } catch (err: any) {
+      Alert.alert('Export failed', err.message);
+    }
+  }, []);
+
+  const handleImportDb = useCallback(async () => {
+    Alert.alert(
+      'Restore from backup',
+      'This will replace ALL current data with the selected backup file. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Choose file',
+          onPress: async () => {
+            try {
+              const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+              if (result.canceled || !result.assets?.length) return;
+              const { uri } = result.assets[0];
+              // Verify SQLite magic bytes
+              const header = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64, length: 16 });
+              const magic = atob(header).slice(0, 15);
+              if (!magic.startsWith('SQLite format 3')) {
+                Alert.alert('Invalid file', 'The selected file is not a SQLite database.');
+                return;
+              }
+              const dst = FileSystem.documentDirectory + 'SQLite/cannaguide.db';
+              await closeDb();
+              await FileSystem.copyAsync({ from: uri, to: dst });
+              await reopenDb();
+              Alert.alert('Restored', 'Database restored. Restart the app to see your data.', [
+                { text: 'OK', onPress: () => navigation.goBack() },
+              ]);
+            } catch (err: any) {
+              await reopenDb().catch(() => {});
+              Alert.alert('Import failed', err.message);
+            }
+          },
+        },
+      ]
+    );
+  }, [navigation]);
+
   const tier = user?.tier ?? 'free';
   const isPro = tier === 'pro';
 
@@ -251,6 +306,24 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
             onPress={handleWipe}
             destructive
             value="→"
+          />
+        </View>
+
+        {/* ---- BACKUP / RESTORE ---- */}
+        <SectionHeader>Backup & restore</SectionHeader>
+        <View style={s.group}>
+          <SettingRow
+            label="Export database"
+            sub="Save a backup file to share or store"
+            onPress={handleExportDb}
+            value="↑"
+          />
+          <SettingRow
+            label="Restore from backup"
+            sub="Replace all data with a backup file"
+            onPress={handleImportDb}
+            destructive
+            value="↓"
           />
         </View>
 

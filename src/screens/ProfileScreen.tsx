@@ -84,7 +84,7 @@ function EffectBar({ label, value, color }: { label: string; value: number; colo
 
 function TerpeneRow({ name, value }: { name: string; value: number }) {
   const isPos  = value >= 0;
-  const pct    = `${roundTo(Math.abs(value) * 100, 0)}%`;
+  const pct    = `${roundTo(Math.abs(value) * 100, 0)}%` as `${number}%`;
   const color  = value >= 0.7 ? C.sage
     : value >= 0.3 ? C.amber
     : value >= 0    ? C.light

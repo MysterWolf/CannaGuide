@@ -224,6 +224,18 @@ export function isDbReady(): boolean {
   return _db !== null;
 }
 
+export async function closeDb(): Promise<void> {
+  if (_db) {
+    await _db.closeAsync();
+    _db = null;
+  }
+}
+
+export async function reopenDb(): Promise<void> {
+  _db = null;
+  await initDb();
+}
+
 export async function resetDb(): Promise<void> {
   if (!_db) return;
   const tables = [

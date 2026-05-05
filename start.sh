@@ -7,7 +7,7 @@ nvm use --delete-prefix v20.20.2 --silent 2>/dev/null || nvm use 20 --silent
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Section 2: Start emulator if not running ──────────────────────────────────
-if ! ~/Android/Sdk/platform-tools/adb devices | grep -q "emulator"; then
+if ! ~/Android/Sdk/platform-tools/adb devices | grep -qE "^emulator-[0-9]+[[:space:]]+device$"; then
   echo "Starting Pixel_3a_API_36 emulator..."
   ~/Android/Sdk/emulator/emulator -avd Pixel_3a_API_36 -no-snapshot-load &
   echo "Waiting for emulator to boot..."
@@ -24,9 +24,11 @@ fi
 ~/Android/Sdk/platform-tools/adb reverse tcp:8081 tcp:8081
 ~/Android/Sdk/platform-tools/adb reverse tcp:8082 tcp:8082
 
-# Kill any existing Metro on 8081/8082
-kill $(lsof -t -i:8081) 2>/dev/null
-kill $(lsof -t -i:8082) 2>/dev/null
+# Kill only the listening Metro process, not emulator client sockets
+METRO_PID=$(lsof -t -i:8081 -sTCP:LISTEN 2>/dev/null)
+[ -n "$METRO_PID" ] && kill "$METRO_PID"
+METRO_PID=$(lsof -t -i:8082 -sTCP:LISTEN 2>/dev/null)
+[ -n "$METRO_PID" ] && kill "$METRO_PID"
 sleep 1
 
 # ── Section 4: Expo Metro bundler ────────────────────────────────────────────
@@ -42,20 +44,16 @@ gnome-terminal --title="CannaGuide Metro" -- bash -c "
 "
 
 # ── Section 5: Wait for Metro then open app ───────────────────────────────────
-echo "Opening Terminal 2 — will wait for Metro then launch app..."
+echo "Opening Terminal 2 — will wait for Metro then launch CannaGuide on emulator..."
 gnome-terminal --title="CannaGuide Launch" -- bash -c "
-  export NVM_DIR=\"\$HOME/.nvm\"
-  source \"\$NVM_DIR/nvm.sh\"
-  nvm use --delete-prefix v20.20.2 --silent 2>/dev/null || nvm use 20 --silent
-  cd \"$SCRIPT_DIR\"
   echo 'Waiting for Expo Metro on port 8081...'
   until curl -s http://localhost:8081/status 2>/dev/null | grep -q 'packager-status:running'; do
     sleep 2
   done
-  echo 'Metro ready. Opening CannaGuide on emulator...'
+  echo 'Metro ready. Setting up port forwarding and launching CannaGuide...'
   ~/Android/Sdk/platform-tools/adb reverse tcp:8081 tcp:8081
   ~/Android/Sdk/platform-tools/adb reverse tcp:8082 tcp:8082
-  npx expo start --dev-client --no-clear
+  ~/Android/Sdk/platform-tools/adb shell am start -n com.anonymous.CannaGuide/.MainActivity
   exec bash
 "
 
