@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Platform, StatusBar, Alert, Switch, Linking,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { dbGetFirst, dbRun, dbAll, isoNow, closeDb, reopenDb } from '../db/database';
