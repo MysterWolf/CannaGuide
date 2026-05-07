@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { initDb } from "./src/db/database";
 import { C } from "./src/theme/colors";
 import { DiaryScreen }      from "./src/screens/DiaryScreen";
@@ -35,11 +36,12 @@ function SettingsStack() {
 }
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator screenOptions={{
       headerShown: false,
       tabBarStyle: { backgroundColor: C.bg, borderTopColor: C.border,
-        borderTopWidth: 0.5, height: 60, paddingBottom: 8 },
+        borderTopWidth: 0.5, height: 60 + insets.bottom },
       tabBarLabelStyle: { fontSize: 11, letterSpacing: 0.3 },
       tabBarActiveTintColor:   C.accent,
       tabBarInactiveTintColor: C.light,
@@ -62,28 +64,24 @@ export default function App() {
       .catch(err => setError(err.message));
   }, []);
 
-  if (error) {
-    return (
-      <View style={[st.center, { backgroundColor: C.bg }]}>
-        <Text style={{ fontFamily: "Georgia", fontSize: 18, color: C.danger }}>Failed to start</Text>
-        <Text style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>{error}</Text>
-      </View>
-    );
-  }
-
-  if (!ready) {
-    return (
-      <View style={[st.center, { backgroundColor: C.bg }]}>
-        <ActivityIndicator color={C.accent} size="large" />
-        <Text style={{ fontSize: 14, color: C.muted, marginTop: 12 }}>Starting up...</Text>
-      </View>
-    );
-  }
-
   return (
-    <NavigationContainer>
-      <MainTabs />
-    </NavigationContainer>
+    <SafeAreaProvider>
+      {error ? (
+        <View style={[st.center, { backgroundColor: C.bg }]}>
+          <Text style={{ fontFamily: "Georgia", fontSize: 18, color: C.danger }}>Failed to start</Text>
+          <Text style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>{error}</Text>
+        </View>
+      ) : !ready ? (
+        <View style={[st.center, { backgroundColor: C.bg }]}>
+          <ActivityIndicator color={C.accent} size="large" />
+          <Text style={{ fontSize: 14, color: C.muted, marginTop: 12 }}>Starting up...</Text>
+        </View>
+      ) : (
+        <NavigationContainer>
+          <MainTabs />
+        </NavigationContainer>
+      )}
+    </SafeAreaProvider>
   );
 }
 
