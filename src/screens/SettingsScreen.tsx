@@ -144,10 +144,17 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
       const dst = FileSystem.cacheDirectory + 'cannaguide_backup.db';
       const info = await FileSystem.getInfoAsync(src);
       if (!info.exists) { Alert.alert('Error', 'Database file not found.'); return; }
-      await FileSystem.copyAsync({ from: src, to: dst });
-      const available = await Sharing.isAvailableAsync();
-      if (!available) { Alert.alert('Error', 'Sharing not available on this device.'); return; }
-      await Sharing.shareAsync(dst, { mimeType: 'application/octet-stream', dialogTitle: 'Save CannaGuide backup' });
+      // Checkpoint WAL into main DB file so all data is flushed before copy
+      await dbAll('PRAGMA wal_checkpoint(TRUNCATE)', []);
+      await closeDb();
+      try {
+        await FileSystem.copyAsync({ from: src, to: dst });
+        const available = await Sharing.isAvailableAsync();
+        if (!available) { Alert.alert('Error', 'Sharing not available on this device.'); return; }
+        await Sharing.shareAsync(dst, { mimeType: 'application/octet-stream', dialogTitle: 'Save CannaGuide backup' });
+      } finally {
+        await reopenDb();
+      }
     } catch (err: any) {
       Alert.alert('Export failed', err.message);
     }
