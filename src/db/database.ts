@@ -207,12 +207,20 @@ async function refreshViews(db: SQLite.SQLiteDatabase): Promise<void> {
 async function addMissingColumns(db: SQLite.SQLiteDatabase): Promise<void> {
   const cols = await db.getAllAsync<{name:string}>('PRAGMA table_info(sessions)');
   const names = cols.map(c => c.name);
-  if (!names.includes('couch_lock_intent')) {
-    try { await db.execAsync('ALTER TABLE sessions ADD COLUMN couch_lock_intent TEXT'); } catch {}
-  }
-  if (!names.includes('hunger_intent')) {
-    try { await db.execAsync('ALTER TABLE sessions ADD COLUMN hunger_intent TEXT'); } catch {}
-  }
+  const add = async (col: string, type: string) => {
+    if (!names.includes(col)) {
+      try { await db.execAsync(`ALTER TABLE sessions ADD COLUMN ${col} ${type}`); } catch {}
+    }
+  };
+  await add('couch_lock_intent',      'TEXT');
+  await add('hunger_intent',          'TEXT');
+  await add('product_category',       'TEXT');
+  await add('mg_thc',                 'REAL');
+  await add('mg_cbd',                 'REAL');
+  await add('product_type',           'TEXT');
+  await add('product_flavor',         'TEXT');
+  await add('functional_ingredients', 'TEXT');
+  await add('use_case',               'TEXT');
 }
 
 export function getDb(): SQLite.SQLiteDatabase {
