@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Platform, StatusBar, Alert, Switch, Linking,
+  NativeModules, PermissionsAndroid,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { dbGetFirst, dbRun, dbAll, isoNow, closeDb, reopenDb } from '../db/database';
 import { C } from '../theme/colors';
@@ -141,17 +141,31 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
   const handleExportDb = useCallback(async () => {
     try {
       const src = FileSystem.documentDirectory + 'SQLite/cannaguide.db';
-      const dst = FileSystem.cacheDirectory + 'cannaguide_backup.db';
       const info = await FileSystem.getInfoAsync(src);
       if (!info.exists) { Alert.alert('Error', 'Database file not found.'); return; }
       // Checkpoint WAL into main DB file so all data is flushed before copy
       await dbAll('PRAGMA wal_checkpoint(TRUNCATE)', []);
       await closeDb();
       try {
-        await FileSystem.copyAsync({ from: src, to: dst });
-        const available = await Sharing.isAvailableAsync();
-        if (!available) { Alert.alert('Error', 'Sharing not available on this device.'); return; }
-        await Sharing.shareAsync(dst, { mimeType: 'application/octet-stream', dialogTitle: 'Save CannaGuide backup' });
+        // Android 9 and below requires WRITE_EXTERNAL_STORAGE at runtime
+        if (Platform.OS === 'android' && (Platform.Version as number) < 29) {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+            {
+              title: 'Storage Permission Required',
+              message: 'CannaGuide needs storage access to save your backup to Downloads.',
+              buttonPositive: 'Allow',
+              buttonNegative: 'Cancel',
+            }
+          );
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            Alert.alert('Permission denied', 'Storage permission is required to save backups to Downloads.');
+            return;
+          }
+        }
+        const dbPath = src.replace('file://', '');
+        await NativeModules.DownloadModule.saveToDownloads(dbPath, 'cannaguide_backup.db');
+        Alert.alert('Backup saved', 'cannaguide_backup.db saved to your Downloads folder.');
       } finally {
         await reopenDb();
       }

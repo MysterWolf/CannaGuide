@@ -6,8 +6,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { initDb } from "./src/db/database";
 import { C } from "./src/theme/colors";
-import { DiaryScreen }      from "./src/screens/DiaryScreen";
+import { DiaryScreen }     from "./src/screens/DiaryScreen";
 import { LogSessionScreen } from "./src/screens/LogSessionScreen";
+import { ExploreScreen }   from "./src/screens/ExploreScreen";
+import { CategoryScreen }  from "./src/screens/CategoryScreen";
 import { DispensaryScreen } from "./src/screens/DispensaryScreen";
 import { RecommendScreen }  from "./src/screens/RecommendScreen";
 import { ProfileScreen }    from "./src/screens/ProfileScreen";
@@ -22,6 +24,15 @@ function DiaryStack() {
       <Stack.Screen name="DiaryList"  component={DiaryScreen} />
       <Stack.Screen name="LogSession" component={LogSessionScreen}
         options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+    </Stack.Navigator>
+  );
+}
+
+function ExploreStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ExploreHome" component={ExploreScreen} />
+      <Stack.Screen name="Category"    component={CategoryScreen} />
     </Stack.Navigator>
   );
 }
@@ -47,6 +58,7 @@ function MainTabs() {
       tabBarInactiveTintColor: C.light,
     }}>
       <Tab.Screen name="Diary"    component={DiaryStack}     options={{ tabBarLabel: "Journal" }} />
+      <Tab.Screen name="Explore"  component={ExploreStack}   options={{ tabBarLabel: "Explore" }} />
       <Tab.Screen name="Find"     component={RecommendScreen} options={{ tabBarLabel: "Find" }} />
       <Tab.Screen name="Profile"  component={ProfileScreen}   options={{ tabBarLabel: "Profile" }} />
       <Tab.Screen name="Settings" component={SettingsStack}   options={{ tabBarLabel: "Settings" }} />
