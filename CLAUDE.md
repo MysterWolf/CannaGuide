@@ -1,7 +1,17 @@
 # CannaGuide — Project Context
 
-Personal cannabis session journal with AI-powered strain recommendations.
+Cannabis advisor and session journal with AI-powered strain recommendations.
 Android-only. Expo SDK 54 bare workflow.
+
+---
+
+## Product Philosophy
+
+**Guide first, tracker second.** The name says it. The primary job of CannaGuide is to
+teach — terpene profiles, lineage, why a strain works, what to try next. Logging sessions
+and tracking effects supports that goal; it is not the goal itself. Every feature decision
+should ask: *does this teach the user something?* Tracker features that don't teach do not
+belong in this app.
 
 **Current version:** 0.1.0-diag (versionCode 1)
 **Package:** `com.anonymous.CannaGuide`
@@ -50,6 +60,8 @@ App.tsx
 
 Single `C` export — all screens import from here. Never hardcode hex values.
 
+**Official CannaGuide palette:**
+
 ```ts
 C.bg          #FAF7F2   // warm off-white — app background
 C.surface     #F2EDE4   // cards, modals, inputs
@@ -59,13 +71,13 @@ C.muted       #8A7A6A   // secondary / placeholder
 C.light       #B8A898   // tertiary, disabled
 C.accent      #8B6B47   // primary action (warm brown)
 C.accentLight #F5EDE3   // accent tint
-C.sage        #6B8F71   // sativa / wellness / positive
+C.sage        #6B8F71   // Sativa — wellness / positive
 C.sageLt      #D4E6D6   // sage tint
-C.amber       #C4883A   // hybrid / warnings / ratings
+C.amber       #C4883A   // Hybrid — warnings / ratings
 C.amberLt     #F5E6CC   // amber tint
-C.danger      #B85450   // indica / negative side effects
+C.danger      #B85450   // Indica — negative side effects
 C.dangerLt    #F0DDDB   // danger tint
-C.purple      #7F77DD   // AI features / recommendations
+C.purple      #7F77DD   // AI features ONLY — do not use for general UI
 C.purpleLt    #EEEDFE   // purple tint
 C.purpleMid   #534AB7   // purple mid-weight
 C.blue        #378ADD   // info / links
@@ -74,10 +86,15 @@ C.white       #FFFFFF
 ```
 
 **Color semantics:**
-- Sativa → sage, Indica → danger, Hybrid → amber
-- AI / Recommend features → purple
-- Active state / primary CTA → accent
+- Sativa → `C.sage` (#6B8F71), Hybrid → `C.amber` (#C4883A), Indica → `C.danger` (#B85450)
+- AI / Recommend / Tier 3 features → `C.purple` (#7F77DD) — AI features only, nowhere else
+- Active state / primary CTA → `C.accent`
 - Warnings / dosing notices → amber on amberLt
+
+**Store profiles and operator theming:**
+- Standard tier: store profiles use the CannaGuide palette above
+- Operator brand colors are **premium tier only** — a ProcessMind LLC configuration engagement
+- Do not apply operator brand colors to any screen without a confirmed premium config
 
 ---
 
@@ -94,6 +111,9 @@ effects (tri-state: positive/negative/neutral per chip), rating, notes.
 ### ExploreScreen (`src/screens/ExploreScreen.tsx`)
 Category grid: Flower, Edibles, THC Beverages, Vapes, Tinctures, Topicals.
 Each tile navigates to CategoryScreen with the category name as a param.
+
+**THC Beverages** is a category tile within this product browser — not a standalone
+page, tab, or section. It lives here alongside Flower, Edibles, etc.
 
 ### CategoryScreen (`src/screens/CategoryScreen.tsx`)
 Placeholder — receives `category` route param. Content TBD per category.
@@ -128,6 +148,32 @@ and `dispensaries`. Effects stored in `session_effects` (per-effect rows).
   change to a hardcoded height; this fixes the Android gesture nav bar overlap.
 - All screen headers hidden (`headerShown: false`) — screens own their headers.
 - LogSession is a modal stack screen (presentation: "modal") inside DiaryStack.
+
+---
+
+## Roadmap
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| 1 | Core browse + education — product categories, strain search, basic profiles | In design |
+| 2 | Logging + personal profile — session logging, terpene fingerprint, preference tracking | In design |
+| 3 | Tier 2 local AI — offline recs from logged history, no API dependency | Planned |
+| 4 | StashPass integration — points wallet, redemption, operator profiles | Planned |
+| 5 | Tier 3 API AI — live strain/brand intelligence, conversational advisor | Planned |
+| 6 | Operator theming — brand colors for premium config engagements | Planned |
+
+**Circles feature** — Phase 4 (after StashPass integration). Private, invite-only peer
+recommendation groups. Users share strain picks with people they trust, not the public.
+
+**StashPass backend:** `github.com/MysterWolf/stashpass-api` — not yet scaffolded.
+
+---
+
+## Do Not Build
+
+- **Standalone THC Beverages page** — THC Beverages is a category in the product browser, full stop
+- **Dark green screens outside store profiles** — the CannaGuide palette is warm/neutral; dark green is not in it
+- **Tracker features that don't teach** — if a feature only records data without informing the user, it doesn't belong here
 
 ---
 
