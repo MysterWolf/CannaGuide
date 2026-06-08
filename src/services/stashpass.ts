@@ -102,7 +102,8 @@ export class StashPassAuthError extends Error {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function requestOtp(contact: string): Promise<void> {
+// Returns _dev_otp string when server is in development mode, null otherwise.
+export async function requestOtp(contact: string): Promise<string | null> {
   const isPhone = /^\+?[\d\s\-()]{7,}$/.test(contact.replace(/\s/g, ''));
   const body = isPhone ? { phone: contact } : { email: contact };
   const res = await fetch(`${STASHPASS_BASE_URL}/auth/otp/request`, {
@@ -114,6 +115,8 @@ export async function requestOtp(contact: string): Promise<void> {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as any).error ?? 'Failed to send OTP');
   }
+  const data = await res.json().catch(() => ({}));
+  return (data as any)._dev_otp ?? null;
 }
 
 export async function verifyOtp(

@@ -4,7 +4,7 @@ import * as SP from '../services/stashpass';
 interface StashPassState {
   isConnected: boolean;
   userId: string | null;
-  requestOtp:  (contact: string) => Promise<void>;
+  requestOtp:  (contact: string) => Promise<string | null>;
   verifyOtp:   (contact: string, otp: string) => Promise<void>;
   disconnect:  () => Promise<void>;
 }
@@ -12,7 +12,7 @@ interface StashPassState {
 const StashPassContext = createContext<StashPassState>({
   isConnected: false,
   userId: null,
-  requestOtp:  async () => {},
+  requestOtp:  async () => null,
   verifyOtp:   async () => {},
   disconnect:  async () => {},
 });
@@ -31,8 +31,8 @@ export function StashPassProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const requestOtp = useCallback(async (contact: string) => {
-    await SP.requestOtp(contact);
+  const requestOtp = useCallback(async (contact: string): Promise<string | null> => {
+    return SP.requestOtp(contact);
   }, []);
 
   const verifyOtp = useCallback(async (contact: string, otp: string) => {

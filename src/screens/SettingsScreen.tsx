@@ -78,8 +78,9 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     if (!spContact.trim()) { Alert.alert('Enter phone or email'); return; }
     setSpSending(true);
     try {
-      await requestOtp(spContact.trim());
+      const devOtp = await requestOtp(spContact.trim());
       setSpStep(1);
+      if (devOtp) setSpOtp(devOtp);
     } catch (err: any) {
       Alert.alert('Failed to send OTP', err.message);
     } finally {
