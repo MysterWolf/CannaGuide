@@ -1,7 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-// Update this before deploying — set to Railway/Render URL once provisioned
-export const STASHPASS_BASE_URL = 'https://stashpass-api.up.railway.app';
+export const STASHPASS_BASE_URL = 'https://stashpass-api-production.up.railway.app';
 
 const KEYS = {
   accessToken:  'stashpass_access_token',
