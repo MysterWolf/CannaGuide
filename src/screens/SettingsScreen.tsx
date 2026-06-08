@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, TextInput, Pressable, StyleSheet,
   Platform, StatusBar, Alert, Switch, Linking,
-  NativeModules, PermissionsAndroid,
+  NativeModules, PermissionsAndroid, ActivityIndicator,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import { dbGetFirst, dbRun, dbAll, isoNow, closeDb, reopenDb } from '../db/database';
 import { C } from '../theme/colors';
+import { useStashPass } from '../context/StashPassContext';
 
 const APP_VERSION  = '1.0.0';
 const FEEDBACK_URL = 'mailto:hello@cannaguide.app?subject=CannaGuide Feedback';
@@ -64,6 +65,52 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
   const [user,      setUser]      = useState<any>(null);
   const [threshold, setThreshold] = useState(5);
   const [loading,   setLoading]   = useState(true);
+
+  // StashPass connect flow
+  const { isConnected, requestOtp, verifyOtp, disconnect } = useStashPass();
+  const [spContact,    setSpContact]    = useState('');
+  const [spOtp,        setSpOtp]        = useState('');
+  const [spStep,       setSpStep]       = useState<0 | 1>(0); // 0=idle/input, 1=awaiting OTP
+  const [spSending,    setSpSending]    = useState(false);
+  const [spVerifying,  setSpVerifying]  = useState(false);
+
+  const handleSpRequest = useCallback(async () => {
+    if (!spContact.trim()) { Alert.alert('Enter phone or email'); return; }
+    setSpSending(true);
+    try {
+      await requestOtp(spContact.trim());
+      setSpStep(1);
+    } catch (err: any) {
+      Alert.alert('Failed to send OTP', err.message);
+    } finally {
+      setSpSending(false);
+    }
+  }, [spContact, requestOtp]);
+
+  const handleSpVerify = useCallback(async () => {
+    if (!spOtp.trim()) { Alert.alert('Enter the code from your message'); return; }
+    setSpVerifying(true);
+    try {
+      await verifyOtp(spContact.trim(), spOtp.trim());
+      setSpContact(''); setSpOtp(''); setSpStep(0);
+      Alert.alert('Connected', 'StashPass wallet linked.');
+    } catch (err: any) {
+      Alert.alert('Invalid code', err.message);
+    } finally {
+      setSpVerifying(false);
+    }
+  }, [spContact, spOtp, verifyOtp]);
+
+  const handleSpDisconnect = useCallback(() => {
+    Alert.alert(
+      'Disconnect StashPass',
+      'Your points balance will not be lost — you can reconnect anytime.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: () => disconnect() },
+      ]
+    );
+  }, [disconnect]);
 
   const loadData = useCallback(async () => {
     try {
@@ -262,6 +309,76 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
           )}
         </View>
 
+        {/* ---- STASHPASS WALLET ---- */}
+        <SectionHeader>StashPass Wallet</SectionHeader>
+        <View style={s.group}>
+          {isConnected ? (
+            <SettingRow
+              label="Wallet connected"
+              sub="Earn and redeem points at participating dispensaries"
+              onPress={handleSpDisconnect}
+              rightElement={
+                <View style={sp.connectedBadge}>
+                  <Text style={sp.connectedBadgeText}>Connected</Text>
+                </View>
+              }
+            />
+          ) : (
+            <View style={sp.connectBlock}>
+              {spStep === 0 ? (
+                <>
+                  <Text style={sp.connectLabel}>Phone or email</Text>
+                  <View style={sp.inputRow}>
+                    <TextInput
+                      style={sp.input}
+                      placeholder="e.g. +1 555 000 0000"
+                      placeholderTextColor={C.light}
+                      value={spContact}
+                      onChangeText={setSpContact}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                    />
+                    <Pressable
+                      onPress={handleSpRequest}
+                      disabled={spSending}
+                      style={[sp.sendBtn, spSending && { opacity: 0.5 }]}>
+                      {spSending
+                        ? <ActivityIndicator size="small" color={C.white} />
+                        : <Text style={sp.sendBtnText}>Send code</Text>}
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={sp.connectLabel}>Enter the 6-digit code</Text>
+                  <View style={sp.inputRow}>
+                    <TextInput
+                      style={sp.input}
+                      placeholder="000000"
+                      placeholderTextColor={C.light}
+                      value={spOtp}
+                      onChangeText={setSpOtp}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                    />
+                    <Pressable
+                      onPress={handleSpVerify}
+                      disabled={spVerifying}
+                      style={[sp.sendBtn, spVerifying && { opacity: 0.5 }]}>
+                      {spVerifying
+                        ? <ActivityIndicator size="small" color={C.white} />
+                        : <Text style={sp.sendBtnText}>Verify</Text>}
+                    </Pressable>
+                  </View>
+                  <Pressable onPress={() => { setSpStep(0); setSpOtp(''); }}>
+                    <Text style={sp.backLink}>← Use a different address</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          )}
+        </View>
+
         {/* ---- DISPENSARIES ---- */}
         <SectionHeader>Dispensaries</SectionHeader>
         <View style={s.group}>
@@ -426,4 +543,27 @@ const s = StyleSheet.create({
   },
   privacyTitle: { fontFamily: 'Georgia', fontSize: 14, color: C.accent },
   privacyBody:  { fontSize: 13, color: C.muted, lineHeight: 19 },
+});
+
+const sp = StyleSheet.create({
+  connectBlock: { padding: 16, gap: 10 },
+  connectLabel: { fontSize: 12, color: C.muted, letterSpacing: 0.5 },
+  inputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  input: {
+    flex: 1, fontSize: 14, color: C.text, backgroundColor: C.surface,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 0.5, borderColor: C.border,
+  },
+  sendBtn: {
+    backgroundColor: C.accent, borderRadius: 8,
+    paddingHorizontal: 16, paddingVertical: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sendBtnText: { color: C.white, fontSize: 14, fontWeight: '500' },
+  backLink: { fontSize: 13, color: C.accent, marginTop: 2 },
+  connectedBadge: {
+    backgroundColor: C.sageLt, paddingHorizontal: 10,
+    paddingVertical: 4, borderRadius: 5,
+  },
+  connectedBadgeText: { fontSize: 12, color: C.sage, fontWeight: '500' },
 });

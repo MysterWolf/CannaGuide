@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { initDb } from "./src/db/database";
 import { C } from "./src/theme/colors";
+import { StashPassProvider } from "./src/context/StashPassContext";
 import { DiaryScreen }     from "./src/screens/DiaryScreen";
 import { LogSessionScreen } from "./src/screens/LogSessionScreen";
 import { ExploreScreen }   from "./src/screens/ExploreScreen";
@@ -78,6 +79,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <StashPassProvider>
       {error ? (
         <View style={[st.center, { backgroundColor: C.bg }]}>
           <Text style={{ fontFamily: "Georgia", fontSize: 18, color: C.danger }}>Failed to start</Text>
@@ -93,6 +95,7 @@ export default function App() {
           <MainTabs />
         </NavigationContainer>
       )}
+      </StashPassProvider>
     </SafeAreaProvider>
   );
 }

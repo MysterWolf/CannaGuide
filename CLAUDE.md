@@ -30,6 +30,7 @@ belong in this app.
 | File I/O | expo-file-system v19 (`/legacy` import required — see Known Issues) |
 | AI | Claude Sonnet 4.6 API (user-supplied key) |
 | Safe area | react-native-safe-area-context |
+| Wallet auth | expo-secure-store (JWT tokens for StashPass) |
 
 ---
 
@@ -38,6 +39,7 @@ belong in this app.
 ```
 App.tsx
 ├── SafeAreaProvider
+│   └── StashPassProvider      ← JWT auth state (isConnected, userId)
 ├── DB init (initDb)
 └── NavigationContainer
     └── MainTabs (bottom tab navigator)
@@ -126,9 +128,15 @@ AI-generated effect profile built from logged sessions.
 
 ### SettingsScreen (`src/screens/SettingsScreen.tsx`)
 API key input, backup/restore (expo-file-system/legacy), dispensary picker.
+StashPass Wallet section: inline OTP connect flow (phone or email → 6-digit code)
+or connected status + disconnect. Auth state from `useStashPass()` context.
 
 ### DispensaryScreen (`src/screens/DispensaryScreen.tsx`)
 Dispensary list and management. Accessed from Settings stack.
+Cards with `stashpass_operator_id` show a `WalletWidget` — live balance,
+check-in button (POST /wallet/earn, amount_dollars: 1, note: 'check-in'),
+and inline redeem flow (POST /wallet/redeem).
+`stashpass_operator_id` stored in local SQLite via `addMissingColumns` migration.
 
 ---
 
@@ -158,14 +166,26 @@ and `dispensaries`. Effects stored in `session_effects` (per-effect rows).
 | 1 | Core browse + education — product categories, strain search, basic profiles | In design |
 | 2 | Logging + personal profile — session logging, terpene fingerprint, preference tracking | In design |
 | 3 | Tier 2 local AI — offline recs from logged history, no API dependency | Planned |
-| 4 | StashPass integration — points wallet, redemption, operator profiles | Planned |
+| 4 | StashPass integration — points wallet, redemption, operator profiles | In progress |
 | 5 | Tier 3 API AI — live strain/brand intelligence, conversational advisor | Planned |
 | 6 | Operator theming — brand colors for premium config engagements | Planned |
 
 **Circles feature** — Phase 4 (after StashPass integration). Private, invite-only peer
 recommendation groups. Users share strain picks with people they trust, not the public.
 
-**StashPass backend:** `github.com/MysterWolf/stashpass-api` — not yet scaffolded.
+**StashPass backend:** `github.com/MysterWolf/stashpass-api` — Phase 1+2 live. Base URL config in `src/services/stashpass.ts` → `STASHPASS_BASE_URL`.
+
+---
+
+## StashPass Integration Invariants
+
+- **`STASHPASS_BASE_URL`** lives in `src/services/stashpass.ts` — update it once Railway/Render URL is known. It is a single constant; do not scatter the URL.
+- **JWT tokens** are stored exclusively in `expo-secure-store` (keys: `stashpass_access_token`, `stashpass_refresh_token`, `stashpass_user_id`). Never write them to SQLite or AsyncStorage.
+- **Auto-refresh**: `apiRequest()` retries once on 401 by calling `POST /auth/refresh`. If refresh fails it clears tokens and throws `StashPassAuthError`. The context sets `isConnected = false` and the user sees the connect flow again in Settings.
+- **`stashpass_operator_id`** is added to the local `dispensaries` table via `addMissingColumns` (ALTER TABLE) — it is not in the original CREATE TABLE. Do not add it to `SCHEMA_STATEMENTS`.
+- **Check-in earn amount**: `amount_dollars: 1.0` with `note: 'check-in'`. The operator's `points_per_dollar` rate determines actual points. This is intentional — operators configure their own earn rate.
+- **Color rule**: StashPass wallet UI uses `C.sage` / `C.sageLt` for the "Connected" badge and the "StashPass" chip on dispensary cards. Do not use `C.purple` (AI only) for wallet features.
+- **`src/context/StashPassContext.tsx`** is the single source of truth for auth state. Do not duplicate `isConnected` state in individual screens — use `useStashPass()`.
 
 ---
 
@@ -195,6 +215,15 @@ adb install -r app/build/outputs/apk/release/cannaguide-release.apk
 ---
 
 ## Changelog
+
+### v0.2.0 — StashPass Phase 4 integration
+- Feat: `src/services/stashpass.ts` — OTP auth, JWT management, balance/earn/redeem API calls
+- Feat: `src/context/StashPassContext.tsx` — StashPassProvider + useStashPass() hook; tokens rehydrated from SecureStore on mount
+- Feat: DispensaryScreen — WalletWidget on linked cards (balance, check-in, redeem); stashpass_operator_id field in add form
+- Feat: SettingsScreen — StashPass Wallet section with inline OTP connect/disconnect flow
+- Feat: App.tsx — wrapped in StashPassProvider
+- Feat: database.ts — addMissingColumns adds stashpass_operator_id to dispensaries at runtime
+- Dep: expo-secure-store added
 
 ### v0.1.0-diag (versionCode 1)
 - Fix: checkpoint WAL and close DB before export copy (backup reliability)

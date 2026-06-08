@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { dbAll, dbRun, generateUUID, isoNow } from '../db/database';
 import { C } from '../theme/colors';
+import { useStashPass } from '../context/StashPassContext';
+import * as SP from '../services/stashpass';
 
 const VENUE_TYPES = [
   { id: 'dispensary', label: 'Dispensary' },
@@ -51,6 +53,142 @@ function StarRow({ value, onChange, color = C.amber }: {
   );
 }
 
+// ─── Wallet widget ────────────────────────────────────────────────────────────
+
+function WalletWidget({ operatorId }: { operatorId: string }) {
+  const { isConnected } = useStashPass();
+  const [balance,     setBalance]     = useState<number | null>(null);
+  const [dollarValue, setDollarValue] = useState(0);
+  const [loadingBal,  setLoadingBal]  = useState(true);
+  const [checkingIn,  setCheckingIn]  = useState(false);
+  const [redeemMode,  setRedeemMode]  = useState(false);
+  const [redeemInput, setRedeemInput] = useState('');
+  const [redeeming,   setRedeeming]   = useState(false);
+
+  const fetchBalance = useCallback(async () => {
+    if (!isConnected) { setLoadingBal(false); return; }
+    try {
+      const r = await SP.getBalance(operatorId);
+      setBalance(r.balance_points);
+      setDollarValue(r.dollar_value);
+    } catch {
+      setBalance(null);
+    } finally {
+      setLoadingBal(false);
+    }
+  }, [isConnected, operatorId]);
+
+  useEffect(() => { fetchBalance(); }, [fetchBalance]);
+
+  if (!isConnected) {
+    return (
+      <View style={w.notLinked}>
+        <Text style={w.notLinkedText}>Connect StashPass in Settings to earn points here</Text>
+      </View>
+    );
+  }
+
+  const handleCheckIn = async () => {
+    setCheckingIn(true);
+    try {
+      const result = await SP.earn({ operatorId });
+      const pts = result.transaction.points_delta;
+      setBalance(result.transaction.balance_after);
+      Alert.alert('Checked in!', `+${pts} point${pts !== 1 ? 's' : ''} earned.`);
+    } catch (err: any) {
+      Alert.alert('Check-in failed', err.message);
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
+  const handleRedeem = async () => {
+    const pts = parseInt(redeemInput, 10);
+    if (!pts || pts <= 0) {
+      Alert.alert('Invalid amount', 'Enter a positive number of points to redeem.');
+      return;
+    }
+    if (balance !== null && pts > balance) {
+      Alert.alert('Not enough points', `You only have ${balance} points.`);
+      return;
+    }
+    setRedeeming(true);
+    try {
+      const result = await SP.redeem({ operatorId, points: pts });
+      setBalance(result.transaction.balance_after);
+      setRedeemMode(false);
+      setRedeemInput('');
+      const val = result.dollar_value.toFixed(2);
+      Alert.alert('Redeemed!', `${pts} points redeemed — worth $${val}.`);
+    } catch (err: any) {
+      Alert.alert('Redeem failed', err.message);
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  return (
+    <View style={w.container}>
+      {/* Balance row */}
+      <View style={w.balanceRow}>
+        <View>
+          {loadingBal ? (
+            <ActivityIndicator size="small" color={C.accent} />
+          ) : (
+            <>
+              <Text style={w.pts}>
+                {balance !== null ? balance.toLocaleString() : '—'} pts
+              </Text>
+              {balance !== null && dollarValue > 0 && (
+                <Text style={w.dollarVal}>${dollarValue.toFixed(2)} value</Text>
+              )}
+            </>
+          )}
+        </View>
+        <View style={w.actions}>
+          <Pressable
+            onPress={handleCheckIn}
+            disabled={checkingIn}
+            style={[w.actionBtn, w.checkinBtn, checkingIn && { opacity: 0.5 }]}>
+            {checkingIn
+              ? <ActivityIndicator size="small" color={C.white} />
+              : <Text style={w.actionBtnText}>Check in</Text>}
+          </Pressable>
+          <Pressable
+            onPress={() => { setRedeemMode(m => !m); setRedeemInput(''); }}
+            style={[w.actionBtn, w.redeemBtn]}>
+            <Text style={[w.actionBtnText, { color: C.accent }]}>Redeem</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Inline redeem form */}
+      {redeemMode && (
+        <View style={w.redeemRow}>
+          <TextInput
+            style={w.redeemInput}
+            placeholder="Points to redeem"
+            placeholderTextColor={C.light}
+            value={redeemInput}
+            onChangeText={setRedeemInput}
+            keyboardType="numeric"
+          />
+          <Pressable
+            onPress={handleRedeem}
+            disabled={redeeming}
+            style={[w.actionBtn, w.checkinBtn, { flex: 0 }, redeeming && { opacity: 0.5 }]}>
+            {redeeming
+              ? <ActivityIndicator size="small" color={C.white} />
+              : <Text style={w.actionBtnText}>Confirm</Text>}
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Dispensary card ──────────────────────────────────────────────────────────
+
 function DispensaryCard({ dispensary, onDelete }: { dispensary: any, onDelete: ()=>void }) {
   const vibeColor = !dispensary.vibe_rating ? C.light
     : dispensary.vibe_rating >= 4 ? C.sage
@@ -85,6 +223,11 @@ function DispensaryCard({ dispensary, onDelete }: { dispensary: any, onDelete: (
                 <Text style={[s.badgeText, { color: C.danger }]}>
                   Would not return
                 </Text>
+              </View>
+            )}
+            {dispensary.stashpass_operator_id && (
+              <View style={[s.badge, { backgroundColor: C.sageLt }]}>
+                <Text style={[s.badgeText, { color: C.sage }]}>StashPass</Text>
               </View>
             )}
           </View>
@@ -124,9 +267,16 @@ function DispensaryCard({ dispensary, onDelete }: { dispensary: any, onDelete: (
           )}
         </View>
       )}
+
+      {/* StashPass wallet — only rendered when operator is linked */}
+      {dispensary.stashpass_operator_id && (
+        <WalletWidget operatorId={dispensary.stashpass_operator_id} />
+      )}
     </View>
   );
 }
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export function DispensaryScreen({ navigation }: { navigation: any }) {
   const [dispensaries, setDispensaries] = useState<any[]>([]);
@@ -134,20 +284,19 @@ export function DispensaryScreen({ navigation }: { navigation: any }) {
   const [showForm,     setShowForm]     = useState(false);
 
   // Form state
-  const [name,        setName]        = useState('');
-  const [city,        setCity]        = useState('');
-  const [venueType,   setVenueType]   = useState<string|null>(null);
-  const [priceTier,   setPriceTier]   = useState<string|null>(null);
-  const [vibeRating,  setVibeRating]  = useState<number|null>(null);
-  const [staffRating, setStaffRating] = useState<number|null>(null);
-  const [wouldReturn, setWouldReturn] = useState(true);
-  const [saving,      setSaving]      = useState(false);
+  const [name,                setName]                = useState('');
+  const [city,                setCity]                = useState('');
+  const [venueType,           setVenueType]           = useState<string|null>(null);
+  const [priceTier,           setPriceTier]           = useState<string|null>(null);
+  const [vibeRating,          setVibeRating]          = useState<number|null>(null);
+  const [staffRating,         setStaffRating]         = useState<number|null>(null);
+  const [wouldReturn,         setWouldReturn]         = useState(true);
+  const [stashpassOperatorId, setStashpassOperatorId] = useState('');
+  const [saving,              setSaving]              = useState(false);
 
   const loadDispensaries = useCallback(async () => {
     try {
-      const rows = await dbAll(
-        'SELECT * FROM dispensaries ORDER BY name ASC'
-      );
+      const rows = await dbAll('SELECT * FROM dispensaries ORDER BY name ASC');
       setDispensaries(rows);
     } catch (err) {
       console.error('[Dispensary] Load error:', err);
@@ -161,6 +310,7 @@ export function DispensaryScreen({ navigation }: { navigation: any }) {
   const resetForm = () => {
     setName(''); setCity(''); setVenueType(null); setPriceTier(null);
     setVibeRating(null); setStaffRating(null); setWouldReturn(true);
+    setStashpassOperatorId('');
   };
 
   const handleSave = useCallback(async () => {
@@ -173,12 +323,13 @@ export function DispensaryScreen({ navigation }: { navigation: any }) {
       await dbRun(
         `INSERT INTO dispensaries
           (id, name, city, venue_type, price_tier,
-           vibe_rating, staff_rating, would_go_back, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+           vibe_rating, staff_rating, would_go_back, created_at, stashpass_operator_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [
           generateUUID(), name.trim(), city.trim()||null,
           venueType, priceTier, vibeRating, staffRating,
           wouldReturn ? 1 : 0, isoNow(),
+          stashpassOperatorId.trim() || null,
         ]
       );
       resetForm();
@@ -189,7 +340,7 @@ export function DispensaryScreen({ navigation }: { navigation: any }) {
     } finally {
       setSaving(false);
     }
-  }, [name, city, venueType, priceTier, vibeRating, staffRating, wouldReturn, loadDispensaries]);
+  }, [name, city, venueType, priceTier, vibeRating, staffRating, wouldReturn, stashpassOperatorId, loadDispensaries]);
 
   const handleDelete = useCallback((id: string, name: string) => {
     Alert.alert(
@@ -258,6 +409,17 @@ export function DispensaryScreen({ navigation }: { navigation: any }) {
               </Pressable>
             </View>
 
+            <Text style={s.fieldLabel}>StashPass operator ID (optional)</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Paste operator UUID"
+              placeholderTextColor={C.light}
+              value={stashpassOperatorId}
+              onChangeText={setStashpassOperatorId}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
             <Pressable onPress={handleSave} disabled={saving}
               style={[s.saveBtn, saving && { opacity: 0.5 }]}>
               {saving
@@ -299,6 +461,8 @@ export function DispensaryScreen({ navigation }: { navigation: any }) {
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
@@ -386,4 +550,43 @@ const s = StyleSheet.create({
     paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8,
   },
   emptyBtnText: { color: C.white, fontSize: 15, fontWeight: '500' },
+});
+
+// ─── Wallet widget styles ─────────────────────────────────────────────────────
+
+const w = StyleSheet.create({
+  container: {
+    borderTopWidth: 0.5, borderTopColor: C.border,
+    paddingTop: 10, gap: 8,
+  },
+  notLinked: {
+    borderTopWidth: 0.5, borderTopColor: C.border,
+    paddingTop: 10,
+  },
+  notLinkedText: { fontSize: 12, color: C.light, fontStyle: 'italic' },
+
+  balanceRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pts: { fontSize: 18, fontFamily: 'Georgia', color: C.text, letterSpacing: 0.2 },
+  dollarVal: { fontSize: 12, color: C.muted, marginTop: 1 },
+
+  actions: { flexDirection: 'row', gap: 8 },
+  actionBtn: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 8, alignItems: 'center', justifyContent: 'center', minWidth: 80,
+  },
+  checkinBtn: { backgroundColor: C.accent },
+  redeemBtn: {
+    backgroundColor: C.accentLight, borderWidth: 0.5, borderColor: C.accent,
+  },
+  actionBtnText: { fontSize: 13, color: C.white, fontWeight: '500' },
+
+  redeemRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  redeemInput: {
+    flex: 1, fontSize: 14, color: C.text, backgroundColor: C.surface,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9,
+    borderWidth: 0.5, borderColor: C.border,
+  },
 });

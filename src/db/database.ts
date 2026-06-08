@@ -205,22 +205,30 @@ async function refreshViews(db: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 async function addMissingColumns(db: SQLite.SQLiteDatabase): Promise<void> {
-  const cols = await db.getAllAsync<{name:string}>('PRAGMA table_info(sessions)');
-  const names = cols.map(c => c.name);
-  const add = async (col: string, type: string) => {
-    if (!names.includes(col)) {
+  // sessions
+  const sessionCols = await db.getAllAsync<{name:string}>('PRAGMA table_info(sessions)');
+  const sessionNames = sessionCols.map(c => c.name);
+  const addToSessions = async (col: string, type: string) => {
+    if (!sessionNames.includes(col)) {
       try { await db.execAsync(`ALTER TABLE sessions ADD COLUMN ${col} ${type}`); } catch {}
     }
   };
-  await add('couch_lock_intent',      'TEXT');
-  await add('hunger_intent',          'TEXT');
-  await add('product_category',       'TEXT');
-  await add('mg_thc',                 'REAL');
-  await add('mg_cbd',                 'REAL');
-  await add('product_type',           'TEXT');
-  await add('product_flavor',         'TEXT');
-  await add('functional_ingredients', 'TEXT');
-  await add('use_case',               'TEXT');
+  await addToSessions('couch_lock_intent',      'TEXT');
+  await addToSessions('hunger_intent',          'TEXT');
+  await addToSessions('product_category',       'TEXT');
+  await addToSessions('mg_thc',                 'REAL');
+  await addToSessions('mg_cbd',                 'REAL');
+  await addToSessions('product_type',           'TEXT');
+  await addToSessions('product_flavor',         'TEXT');
+  await addToSessions('functional_ingredients', 'TEXT');
+  await addToSessions('use_case',               'TEXT');
+
+  // dispensaries
+  const dispensaryCols = await db.getAllAsync<{name:string}>('PRAGMA table_info(dispensaries)');
+  const dispensaryNames = dispensaryCols.map(c => c.name);
+  if (!dispensaryNames.includes('stashpass_operator_id')) {
+    try { await db.execAsync('ALTER TABLE dispensaries ADD COLUMN stashpass_operator_id TEXT'); } catch {}
+  }
 }
 
 export function getDb(): SQLite.SQLiteDatabase {
