@@ -68,19 +68,23 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
 
   // StashPass connect flow
   const { isConnected, requestOtp, verifyOtp, disconnect } = useStashPass();
-  const [spContact,    setSpContact]    = useState('');
-  const [spOtp,        setSpOtp]        = useState('');
-  const [spStep,       setSpStep]       = useState<0 | 1>(0); // 0=idle/input, 1=awaiting OTP
-  const [spSending,    setSpSending]    = useState(false);
-  const [spVerifying,  setSpVerifying]  = useState(false);
+  const [spContact,   setSpContact]   = useState('');
+  const [spOtp,       setSpOtp]       = useState('');
+  const [otpSent,     setOtpSent]     = useState(false);
+  const [spSending,   setSpSending]   = useState(false);
+  const [spVerifying, setSpVerifying] = useState(false);
 
   const handleSpRequest = useCallback(async () => {
     if (!spContact.trim()) { Alert.alert('Enter phone or email'); return; }
     setSpSending(true);
     try {
       const devOtp = await requestOtp(spContact.trim());
-      setSpStep(1);
-      if (devOtp) setSpOtp(devOtp);
+      // Set both in the same synchronous pass so the transition and
+      // pre-filled value land in a single render — no intermediate
+      // frame where the OTP input is empty or the contact field is
+      // still visible with a stale value.
+      setOtpSent(true);
+      setSpOtp(devOtp ?? '');
     } catch (err: any) {
       Alert.alert('Failed to send OTP', err.message);
     } finally {
@@ -93,7 +97,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     setSpVerifying(true);
     try {
       await verifyOtp(spContact.trim(), spOtp.trim());
-      setSpContact(''); setSpOtp(''); setSpStep(0);
+      setSpContact(''); setSpOtp(''); setOtpSent(false);
       Alert.alert('Connected', 'StashPass wallet linked.');
     } catch (err: any) {
       Alert.alert('Invalid code', err.message);
@@ -326,11 +330,12 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
             />
           ) : (
             <View style={sp.connectBlock}>
-              {spStep === 0 ? (
+              {!otpSent ? (
                 <>
                   <Text style={sp.connectLabel}>Phone or email</Text>
                   <View style={sp.inputRow}>
                     <TextInput
+                      key="contact-input"
                       style={sp.input}
                       placeholder="e.g. +1 555 000 0000"
                       placeholderTextColor={C.light}
@@ -338,6 +343,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                       onChangeText={setSpContact}
                       autoCapitalize="none"
                       keyboardType="email-address"
+                      autoComplete="email"
                     />
                     <Pressable
                       onPress={handleSpRequest}
@@ -354,6 +360,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                   <Text style={sp.connectLabel}>Enter the 6-digit code</Text>
                   <View style={sp.inputRow}>
                     <TextInput
+                      key="otp-input"
                       style={sp.input}
                       placeholder="000000"
                       placeholderTextColor={C.light}
@@ -361,6 +368,8 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                       onChangeText={setSpOtp}
                       keyboardType="number-pad"
                       maxLength={6}
+                      autoFocus
+                      autoComplete="sms-otp"
                     />
                     <Pressable
                       onPress={handleSpVerify}
@@ -371,7 +380,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                         : <Text style={sp.sendBtnText}>Verify</Text>}
                     </Pressable>
                   </View>
-                  <Pressable onPress={() => { setSpStep(0); setSpOtp(''); }}>
+                  <Pressable onPress={() => { setOtpSent(false); setSpOtp(''); }}>
                     <Text style={sp.backLink}>← Use a different address</Text>
                   </Pressable>
                 </>
