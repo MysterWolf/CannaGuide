@@ -179,13 +179,14 @@ recommendation groups. Users share strain picks with people they trust, not the 
 
 ## StashPass Integration Invariants
 
-- **`STASHPASS_BASE_URL`** lives in `src/services/stashpass.ts` — update it once Railway/Render URL is known. It is a single constant; do not scatter the URL.
+- **`STASHPASS_BASE_URL`** lives in `src/services/stashpass.ts` — currently set to `https://stashpass-api-production.up.railway.app`. It is a single constant; do not scatter the URL.
 - **JWT tokens** are stored exclusively in `expo-secure-store` (keys: `stashpass_access_token`, `stashpass_refresh_token`, `stashpass_user_id`). Never write them to SQLite or AsyncStorage.
 - **Auto-refresh**: `apiRequest()` retries once on 401 by calling `POST /auth/refresh`. If refresh fails it clears tokens and throws `StashPassAuthError`. The context sets `isConnected = false` and the user sees the connect flow again in Settings.
 - **`stashpass_operator_id`** is added to the local `dispensaries` table via `addMissingColumns` (ALTER TABLE) — it is not in the original CREATE TABLE. Do not add it to `SCHEMA_STATEMENTS`.
 - **Check-in earn amount**: `amount_dollars: 1.0` with `note: 'check-in'`. The operator's `points_per_dollar` rate determines actual points. This is intentional — operators configure their own earn rate.
 - **Color rule**: StashPass wallet UI uses `C.sage` / `C.sageLt` for the "Connected" badge and the "StashPass" chip on dispensary cards. Do not use `C.purple` (AI only) for wallet features.
 - **`src/context/StashPassContext.tsx`** is the single source of truth for auth state. Do not duplicate `isConnected` state in individual screens — use `useStashPass()`.
+- **`_dev_otp` auto-fill**: after `POST /auth/otp/request` succeeds, if the response contains `_dev_otp` (non-production API only), automatically populate the OTP input in SettingsScreen. The `requestOtp()` function in `stashpass.ts` returns `string | null` — non-null means a dev OTP was returned. SettingsScreen: `const devOtp = await requestOtp(...); setSpStep(1); if (devOtp) setSpOtp(devOtp);` Do not ship this logic behind an additional env flag — the API already guards it.
 
 ---
 
@@ -215,6 +216,10 @@ adb install -r app/build/outputs/apk/release/cannaguide-release.apk
 ---
 
 ## Changelog
+
+### v0.2.1 — StashPass dev convenience + build
+- Feat: SettingsScreen — auto-populate OTP field from `_dev_otp` in non-production API responses
+- Build: APK built and installed on two Android devices via adb
 
 ### v0.2.0 — StashPass Phase 4 integration
 - Feat: `src/services/stashpass.ts` — OTP auth, JWT management, balance/earn/redeem API calls
