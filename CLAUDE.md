@@ -186,7 +186,8 @@ recommendation groups. Users share strain picks with people they trust, not the 
 - **Check-in earn amount**: `amount_dollars: 1.0` with `note: 'check-in'`. The operator's `points_per_dollar` rate determines actual points. This is intentional — operators configure their own earn rate.
 - **Color rule**: StashPass wallet UI uses `C.sage` / `C.sageLt` for the "Connected" badge and the "StashPass" chip on dispensary cards. Do not use `C.purple` (AI only) for wallet features.
 - **`src/context/StashPassContext.tsx`** is the single source of truth for auth state. Do not duplicate `isConnected` state in individual screens — use `useStashPass()`.
-- **`_dev_otp` auto-fill**: after `POST /auth/otp/request` succeeds, if the response contains `_dev_otp` (non-production API only), automatically populate the OTP input in SettingsScreen. The `requestOtp()` function in `stashpass.ts` returns `string | null` — non-null means a dev OTP was returned. SettingsScreen: `const devOtp = await requestOtp(...); setSpStep(1); if (devOtp) setSpOtp(devOtp);` Do not ship this logic behind an additional env flag — the API already guards it.
+- **`_dev_otp` auto-fill**: after `POST /auth/otp/request` succeeds, `setOtpSent(true)` and `setSpOtp(devOtp ?? '')` are called together so both land in the same render — no intermediate frame where the OTP input is empty. Do not add a conditional around `setSpOtp` — always set it (empty string if no devOtp).
+- **OTP step transition**: SettingsScreen uses `otpSent: boolean` (not `spStep: 0 | 1`) to gate rendering. The contact TextInput has `key="contact-input"` and the OTP TextInput has `key="otp-input"` — these force React Native to unmount and remount fresh native views on transition, preventing Android from reusing the same native text field and bleeding the old value through. The OTP input also has `autoFocus` and `autoComplete="sms-otp"`.
 
 ---
 
@@ -216,6 +217,11 @@ adb install -r app/build/outputs/apk/release/cannaguide-release.apk
 ---
 
 ## Changelog
+
+### v0.2.2 — OTP step transition fix
+- Fix: SettingsScreen — replaced `spStep: 0 | 1` with explicit `otpSent: boolean`; contact and OTP TextInputs now have `key` props (`"contact-input"` / `"otp-input"`) to force fresh native view mounts on transition; OTP input has `autoFocus` and `autoComplete="sms-otp"`; contact input has `autoComplete="email"`
+- Fix: `setSpOtp(devOtp ?? '')` now always called (previously conditional `if (devOtp)` could leave OTP state empty)
+- Build: APK built and installed on two Android devices via adb
 
 ### v0.2.1 — StashPass dev convenience + build
 - Feat: SettingsScreen — auto-populate OTP field from `_dev_otp` in non-production API responses
