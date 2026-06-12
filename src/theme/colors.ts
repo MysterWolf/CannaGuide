@@ -18,5 +18,7 @@ export const C = {
   purpleMid:   '#534AB7',
   blue:        '#378ADD',
   blueLt:      '#E6F1FB',
+  circles:     '#5A7AB8',
+  circlesLt:   '#EDF1FA',
   white:       '#FFFFFF',
 };

@@ -170,8 +170,7 @@ and `dispensaries`. Effects stored in `session_effects` (per-effect rows).
 | 5 | Tier 3 API AI — live strain/brand intelligence, conversational advisor | Planned |
 | 6 | Operator theming — brand colors for premium config engagements | Planned |
 
-**Circles feature** — Phase 4 (after StashPass integration). Private, invite-only peer
-recommendation groups. Users share strain picks with people they trust, not the public.
+**Circles feature** — Phase 4a shipped (MVP: AsyncStorage, display-name members, no real auth). Phase 4b: wire real auth via StashPass, real invites, cross-stack share entry points from store/product screens.
 
 **StashPass backend:** `github.com/MysterWolf/stashpass-api` — Phase 1+2 live. Base URL config in `src/services/stashpass.ts` → `STASHPASS_BASE_URL`.
 
@@ -217,6 +216,38 @@ adb install -r app/build/outputs/apk/release/cannaguide-release.apk
 ---
 
 ## Changelog
+
+### v0.3.1 — Circles: QR invite + deep link (Phase 4a continued)
+- Dep: `react-native-svg` ^15.15.5, `react-native-qrcode-svg` ^6.3.21 added
+- Dep: `expo-notifications` ~0.29.0, `expo-clipboard` ~6.0.0 added (SDK 54 compatible; pinned expo-constants back to ~18.0.13 after npm version conflict)
+- Feat: `src/services/circles.ts` — added `PendingRequest` type; `Circle` gains `inviteToken` (8-char uppercase random) and `pendingRequests: PendingRequest[]`; backfill on read for existing circles; new exports: `getInviteLink`, `parseInviteUrl`, `requestToJoin` (returns `JoinResult` enum), `approveRequest`, `declineRequest`
+- Feat: `src/services/notifications.ts` — `notifyJoinRequest` fires immediate local notification on join request; fails silently if permission denied (badge in CirclesScreen is the fallback)
+- Feat: `android/app/src/main/AndroidManifest.xml` — added `cannaguide://` scheme intent-filter alongside existing `exp+cannaguide`; added `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED` permissions
+- Feat: `app.json` — added `"scheme": "cannaguide"`, expo-notifications plugin, version bumped to `0.1.0-alpha`
+- Feat: `android/app/build.gradle` — versionCode 2, versionName "0.1.0-alpha"
+- Feat: `src/screens/circles/JoinCircleScreen.tsx` — shown when deep link opened; validates token, shows circle info (name, emoji, owner, member count); states: found / already_member / pending / requested / invalid_token / needs_profile; "Request to Join" fires `requestToJoin` + local notification
+- Feat: `src/screens/circles/CircleDetailScreen.tsx` — "Invite" button in header → modal with QR code (`react-native-qrcode-svg`, accent brown dots on warm surface bg), "Copy link" (expo-clipboard, copy confirmed flash), "Share via…" (RNShare); pending requests badge (red dot, count) on header → modal listing pending members with Approve / ✕ Decline per row; owner-only visibility
+- Feat: `src/screens/circles/CirclesScreen.tsx` — pending request count badge on Circle card (owner only)
+- Feat: `App.tsx` — `useNavigationContainerRef` for deep link nav; `Linking.getInitialURL` + `addEventListener('url')` handle both cold-start and foreground deep links; pending URL queued until `onReady`; `JoinCircle` added to `CirclesStack`
+
+**Deep link format:** `cannaguide://circles/join?id=CIRCLE_ID&token=INVITE_TOKEN`
+**Owner approval flow:** requester taps link → JoinCircleScreen → "Request to Join" → local notification fires on owner's device → owner sees badge on CircleDetail header → approves/declines in modal
+**Build:** versionCode 2, versionName 0.1.0-alpha; released to GitHub as v0.1.0-alpha
+
+### v0.3.0 — Circles MVP (Phase 4a)
+- Dep: `@react-native-async-storage/async-storage` ^3.1.1 added
+- Feat: `src/theme/colors.ts` — added `circles: '#5A7AB8'` and `circlesLt: '#EDF1FA'` (social layer, distinct from browse/education)
+- Feat: `src/services/circles.ts` — AsyncStorage data layer; types: `Member`, `Circle`, `Share`, `Reaction`, `Comment`, `StorePayload`, `ProductPayload`; CRUD: `getProfile`, `saveProfile`, `getOrCreateProfile`, `createCircle`, `getShares`, `addShare`, `toggleReaction`, `addComment`; members stored in `circles_members` map keyed by userId
+- Feat: `src/screens/circles/CirclesNavigator.ts` — `CirclesStackParamList` type (CirclesList, CircleDetail, CreateCircle, ShareToCircle)
+- Feat: `src/screens/circles/CirclesScreen.tsx` — Circles tab entry; Circle cards (emoji, name, member count, last share preview); "+" button top right; inline profile setup modal (display name + 6-avatar emoji picker); empty state with CTA
+- Feat: `src/screens/circles/CreateCircleScreen.tsx` — modal; name input; 6-option emoji picker; add members by display name → pills (tap to remove); owner auto-added; "Create" header button
+- Feat: `src/screens/circles/CircleDetailScreen.tsx` — chronological share feed via FlatList; each card: sharer avatar + name + timestamp, Discovery/Product badge, payload mini-card, personal note, reaction bar (🔖 Save / 🔥 Fire / 🤔 Curious with toggle + counts), comment count → inline thread expand; comment text input + Send; "Share" button in header → ShareToCircleScreen
+- Feat: `src/screens/circles/ShareToCircleScreen.tsx` — modal; type selector (store/product) if no pre-loaded payload; name + sub-field inputs or pre-loaded card; note input (280 chars); circle selector when user is in multiple circles; accepts optional `circleId`, `type`, `payload` params for pre-loading from store/product screens
+- Feat: `App.tsx` — `CirclesStack` navigator (CirclesList + CircleDetail + CreateCircle modal + ShareToCircle modal); Circles tab added between Find and Profile; tab uses `C.circles` as active tint
+
+**Privacy invariant:** every share is an explicit tap — no auto-posting.
+**No backend:** all data in AsyncStorage. No real auth — members added by display name for field test. Real auth + invites in Phase 4b (StashPass wire-up).
+**Share entry points (Phase 4b):** `ShareToCircleScreen` accepts `payload` param — when store/product screens exist, navigate with pre-loaded payload. Works as manual share now.
 
 ### v0.2.2 — OTP step transition fix
 - Fix: SettingsScreen — replaced `spStep: 0 | 1` with explicit `otpSent: boolean`; contact and OTP TextInputs now have `key` props (`"contact-input"` / `"otp-input"`) to force fresh native view mounts on transition; OTP input has `autoFocus` and `autoComplete="sms-otp"`; contact input has `autoComplete="email"`

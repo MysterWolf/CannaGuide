@@ -2,7 +2,8 @@
   "expo": {
     "name": "CannaGuide",
     "slug": "CannaGuide",
-    "version": "1.0.0",
+    "version": "0.1.0-alpha",
+    "scheme": "cannaguide",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -29,7 +30,8 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      ["expo-notifications", { "icon": "./assets/icon.png", "color": "#8B6B47" }]
     ]
   }
 }
