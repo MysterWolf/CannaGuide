@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/discover/discover_screen.dart';
 import '../screens/circles/circles_screen.dart';
+import '../screens/circles/circle_detail_screen.dart';
+import '../screens/circles/create_circle_screen.dart';
+import '../screens/circles/share_to_circle_screen.dart';
+import '../screens/circles/join_circle_screen.dart';
 import '../screens/profile/profile_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
@@ -16,32 +20,54 @@ final appRouter = GoRouter(
   navigatorKey: _rootKey,
   initialLocation: '/home',
   routes: [
+    // Deep link: cannaguide://circles/join?id=X&token=Y
+    GoRoute(
+      path: '/circles/join',
+      parentNavigatorKey: _rootKey,
+      builder: (context, state) => JoinCircleScreen(
+        circleId: state.uri.queryParameters['id'] ?? '',
+        token: state.uri.queryParameters['token'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/circles/create',
+      parentNavigatorKey: _rootKey,
+      builder: (context, _) => const CreateCircleScreen(),
+    ),
+    GoRoute(
+      path: '/circles/:id',
+      parentNavigatorKey: _rootKey,
+      builder: (context, state) => CircleDetailScreen(circleId: state.pathParameters['id']!),
+      routes: [
+        GoRoute(
+          path: 'share',
+          builder: (context, state) => ShareToCircleScreen(
+            circleId: state.pathParameters['id']!,
+            preloadType: state.uri.queryParameters['type'],
+            preloadName: state.uri.queryParameters['name'],
+            preloadSub: state.uri.queryParameters['sub'],
+          ),
+        ),
+      ],
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => _ScaffoldWithNav(shell: shell),
       branches: [
         StatefulShellBranch(
           navigatorKey: _homeKey,
-          routes: [
-            GoRoute(path: '/home', builder: (context, _) => const HomeScreen()),
-          ],
+          routes: [GoRoute(path: '/home', builder: (context, _) => const HomeScreen())],
         ),
         StatefulShellBranch(
           navigatorKey: _discoverKey,
-          routes: [
-            GoRoute(path: '/discover', builder: (context, _) => const DiscoverScreen()),
-          ],
+          routes: [GoRoute(path: '/discover', builder: (context, _) => const DiscoverScreen())],
         ),
         StatefulShellBranch(
           navigatorKey: _circlesKey,
-          routes: [
-            GoRoute(path: '/circles', builder: (context, _) => const CirclesScreen()),
-          ],
+          routes: [GoRoute(path: '/circles', builder: (context, _) => const CirclesScreen())],
         ),
         StatefulShellBranch(
           navigatorKey: _profileKey,
-          routes: [
-            GoRoute(path: '/profile', builder: (context, _) => const ProfileScreen()),
-          ],
+          routes: [GoRoute(path: '/profile', builder: (context, _) => const ProfileScreen())],
         ),
       ],
     ),
@@ -58,10 +84,7 @@ class _ScaffoldWithNav extends StatelessWidget {
       body: shell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: shell.currentIndex,
-        onDestinationSelected: (i) => shell.goBranch(
-          i,
-          initialLocation: i == shell.currentIndex,
-        ),
+        onDestinationSelected: (i) => shell.goBranch(i, initialLocation: i == shell.currentIndex),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Discover'),

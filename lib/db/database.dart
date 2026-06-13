@@ -9,7 +9,7 @@ import 'models/strain.dart';
 
 class AppDatabase {
   static const _dbName = 'cannaguide.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   static Database? _db;
 
@@ -224,6 +224,8 @@ class AppDatabase {
         LEFT JOIN sessions sess ON sess.strain_id = s.id
         GROUP BY s.id''');
 
+    await _createCirclesTables(db);
+
     await db.execute('''
       CREATE VIEW IF NOT EXISTS v_diary AS
         SELECT sess.id, sess.session_at, sess.time_of_day, sess.method,
@@ -240,8 +242,65 @@ class AppDatabase {
         ORDER BY sess.session_at DESC''');
   }
 
+  static Future<void> _createCirclesTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS circles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        emoji TEXT,
+        owner_id TEXT NOT NULL,
+        invite_token TEXT,
+        created_at INTEGER NOT NULL
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS circle_members (
+        circle_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        display_name TEXT,
+        avatar TEXT,
+        joined_at INTEGER NOT NULL,
+        PRIMARY KEY (circle_id, user_id)
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS circle_shares (
+        id TEXT PRIMARY KEY,
+        circle_id TEXT NOT NULL,
+        sharer_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        payload TEXT,
+        note TEXT,
+        timestamp INTEGER NOT NULL
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS circle_reactions (
+        share_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        PRIMARY KEY (share_id, user_id, type)
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS circle_comments (
+        id TEXT PRIMARY KEY,
+        share_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        display_name TEXT,
+        text TEXT NOT NULL,
+        timestamp INTEGER NOT NULL
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_requests (
+        circle_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        display_name TEXT,
+        requested_at INTEGER NOT NULL,
+        PRIMARY KEY (circle_id, user_id)
+      )''');
+  }
+
   static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // future migrations here
+    if (oldVersion < 2) {
+      await _createCirclesTables(db);
+    }
   }
 
   // ─── Strains ────────────────────────────────────────────────────────────────
@@ -288,6 +347,91 @@ class AppDatabase {
 
   static Future<void> insertDispensary(Dispensary d) async =>
       (await db).insert('dispensaries', d.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+
+  // ─── Circles ────────────────────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getCirclesForUser(String userId) async =>
+      (await db).rawQuery(
+        'SELECT c.* FROM circles c JOIN circle_members m ON m.circle_id = c.id WHERE m.user_id = ? ORDER BY c.created_at DESC',
+        [userId],
+      );
+
+  static Future<Map<String, dynamic>?> getCircle(String id) async {
+    final rows = await (await db).query('circles', where: 'id = ?', whereArgs: [id]);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  static Future<Map<String, dynamic>?> getCircleByToken(String token) async {
+    final rows = await (await db).query('circles', where: 'invite_token = ?', whereArgs: [token]);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  static Future<void> insertCircle(Map<String, dynamic> circle) async =>
+      (await db).insert('circles', circle, conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<void> insertMember(Map<String, dynamic> member) async =>
+      (await db).insert('circle_members', member, conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<bool> isMember(String circleId, String userId) async {
+    final rows = await (await db).query(
+      'circle_members',
+      where: 'circle_id = ? AND user_id = ?',
+      whereArgs: [circleId, userId],
+    );
+    return rows.isNotEmpty;
+  }
+
+  static Future<List<Map<String, dynamic>>> getMembers(String circleId) async =>
+      (await db).query('circle_members', where: 'circle_id = ?', whereArgs: [circleId], orderBy: 'joined_at ASC');
+
+  static Future<List<Map<String, dynamic>>> getShares(String circleId) async =>
+      (await db).query('circle_shares', where: 'circle_id = ?', whereArgs: [circleId], orderBy: 'timestamp DESC');
+
+  static Future<String> insertShare(Map<String, dynamic> share) async {
+    await (await db).insert('circle_shares', share, conflictAlgorithm: ConflictAlgorithm.replace);
+    return share['id'] as String;
+  }
+
+  static Future<List<Map<String, dynamic>>> getReactions(String shareId) async =>
+      (await db).query('circle_reactions', where: 'share_id = ?', whereArgs: [shareId]);
+
+  static Future<void> toggleReaction(String shareId, String userId, String type) async {
+    final d = await db;
+    final existing = await d.query(
+      'circle_reactions',
+      where: 'share_id = ? AND user_id = ? AND type = ?',
+      whereArgs: [shareId, userId, type],
+    );
+    if (existing.isNotEmpty) {
+      await d.delete('circle_reactions', where: 'share_id = ? AND user_id = ? AND type = ?', whereArgs: [shareId, userId, type]);
+    } else {
+      await d.insert('circle_reactions', {'share_id': shareId, 'user_id': userId, 'type': type}, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getComments(String shareId) async =>
+      (await db).query('circle_comments', where: 'share_id = ?', whereArgs: [shareId], orderBy: 'timestamp ASC');
+
+  static Future<void> insertComment(Map<String, dynamic> comment) async =>
+      (await db).insert('circle_comments', comment, conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<List<Map<String, dynamic>>> getPendingRequests(String circleId) async =>
+      (await db).query('pending_requests', where: 'circle_id = ?', whereArgs: [circleId], orderBy: 'requested_at ASC');
+
+  static Future<bool> hasPendingRequest(String circleId, String userId) async {
+    final rows = await (await db).query(
+      'pending_requests',
+      where: 'circle_id = ? AND user_id = ?',
+      whereArgs: [circleId, userId],
+    );
+    return rows.isNotEmpty;
+  }
+
+  static Future<void> insertPendingRequest(Map<String, dynamic> req) async =>
+      (await db).insert('pending_requests', req, conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<void> deletePendingRequest(String circleId, String userId) async =>
+      (await db).delete('pending_requests', where: 'circle_id = ? AND user_id = ?', whereArgs: [circleId, userId]);
 
   // ─── Counts ─────────────────────────────────────────────────────────────────
 

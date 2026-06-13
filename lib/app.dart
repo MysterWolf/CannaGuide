@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'providers/circles_provider.dart';
 import 'providers/sessions_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/strains_provider.dart';
@@ -17,6 +18,7 @@ class CannaGuideApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SettingsProvider()..load()),
         ChangeNotifierProvider(create: (_) => SessionsProvider()),
         ChangeNotifierProvider(create: (_) => StrainsProvider()),
+        ChangeNotifierProvider(create: (_) => CirclesProvider()),
       ],
       child: MaterialApp.router(
         title: 'CannaGuide',

@@ -218,6 +218,21 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ---
 
+## Changelog
+
+### v1.0.1 — Circles feature (2026-06-13)
+- DB: bumped to version 2; added 6 Circles tables (`circles`, `circle_members`, `circle_shares`, `circle_reactions`, `circle_comments`, `pending_requests`) via `_onUpgrade` for existing installs
+- Provider: `CirclesProvider` — local user identity (UUID + display name + avatar in SharedPreferences); full CRUD for circles, members, shares, reactions, comments, pending requests
+- Screen: `CirclesScreen` — tab root; profile setup on first use (display name + 6-avatar picker, `C.circles` blue CTA); circle list with emoji + name cards; "+" button
+- Screen: `CreateCircleScreen` — modal; name input, 12-emoji picker, add members by display name → chips; "Create" header button
+- Screen: `CircleDetailScreen` — chronological share feed; reaction bar (🔖 Save / 🔥 Fire / 🤔 Curious, toggle + count); inline comment thread (expand/collapse); Invite button → bottom sheet with QR code + Copy Link + Share; pending requests badge (owner only) → approve/decline modal; "Share" FAB → ShareToCircleScreen
+- Screen: `ShareToCircleScreen` — type selector (strain/dispensary/product); name + sub fields; 280-char note; pre-loadable from strain/dispensary screens via query params (`?type=X&name=Y&sub=Z`)
+- Screen: `JoinCircleScreen` — deep link target; validates circle + token; states: found/already_member/pending/requested/invalid/needs_profile; "Request to Join" → pending
+- Deep link: `cannaguide://app/circles/join?id=X&token=Y` registered in AndroidManifest; go_router matches `/circles/join` (host=`app`, path=`/circles/join`)
+- No auto-posting — every share is an explicit tap
+
+---
+
 ## Roadmap
 
 | Phase | Focus | Status |
@@ -225,6 +240,6 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 | 1 | Core browse + education — product categories, strain detail, terpene profiles | Next |
 | 2 | Log session flow — full LogSessionScreen in Flutter | Next |
 | 3 | AI effect profile — Claude integration, ProfileScreen | Planned |
-| 4 | Circles — social layer with real auth | Planned |
+| 4 | Circles — sqflite data layer, full 4-screen feature | **Done 2026-06-13** |
 | 5 | StashPass integration — wallet, check-in, operator profiles | Planned |
 | 6 | Operator theming — brand colors for premium config | Planned |
