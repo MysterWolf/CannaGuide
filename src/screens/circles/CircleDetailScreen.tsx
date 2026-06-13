@@ -8,7 +8,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, RouteProp } from '@react-navigation/native-stack';
 import QRCode from 'react-native-qrcode-svg';
-import * as Clipboard from 'expo-clipboard';
 import { C } from '../../theme/colors';
 import {
   getCircles, getShares, getAllMembers, getProfile,
@@ -206,7 +205,6 @@ export function CircleDetailScreen() {
   // Invite modal
   const [inviteVisible,   setInviteVisible]   = useState(false);
   const [inviteLink,      setInviteLink]       = useState('');
-  const [copyConfirmed,   setCopyConfirmed]    = useState(false);
 
   // Pending requests modal
   const [requestsVisible,  setRequestsVisible]  = useState(false);
@@ -235,15 +233,9 @@ export function CircleDetailScreen() {
     setInviteVisible(true);
   };
 
-  const handleCopy = async () => {
-    await Clipboard.setStringAsync(inviteLink);
-    setCopyConfirmed(true);
-    setTimeout(() => setCopyConfirmed(false), 2000);
-  };
-
-  const handleSystemShare = async () => {
+  const handleCopyLink = async () => {
     try {
-      await RNShare.share({ message: `Join my Circle on CannaGuide: ${inviteLink}` });
+      await RNShare.share({ message: inviteLink });
     } catch {}
   };
 
@@ -358,11 +350,8 @@ export function CircleDetailScreen() {
               ) : null}
             </View>
 
-            <Pressable style={[m.btn, m.copyBtn]} onPress={handleCopy}>
-              <Text style={m.copyBtnText}>{copyConfirmed ? '✓ Copied!' : 'Copy link'}</Text>
-            </Pressable>
-            <Pressable style={[m.btn, m.shareBtn]} onPress={handleSystemShare}>
-              <Text style={m.shareBtnText}>Share via…</Text>
+            <Pressable style={[m.btn, m.copyBtn]} onPress={handleCopyLink}>
+              <Text style={m.copyBtnText}>Copy link</Text>
             </Pressable>
           </View>
         </View>

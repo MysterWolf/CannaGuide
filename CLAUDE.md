@@ -208,9 +208,20 @@ and `dispensaries`. Effects stored in `session_effects` (per-effect rows).
 
 ## Build
 
+**Never use `npx expo run:android` alone** — it produces a debug APK that shows the Metro
+bundler connect screen instead of launching the app. Always bundle JS first with `--dev false`.
+
 ```bash
-cd android && ./gradlew assembleRelease
-adb install -r app/build/outputs/apk/release/cannaguide-release.apk
+# Bundle JS (no Metro dependency), then assemble + sideload
+cd ~/CannaGuide
+npx expo export:embed \
+  --platform android \
+  --dev false \
+  --entry-file index.ts \
+  --bundle-output android/app/src/main/assets/index.android.bundle \
+  --assets-dest android/app/src/main/res
+cd android && ./gradlew assembleDebug
+adb -s 22081JEGR00391 install -r app/build/outputs/apk/debug/cannaguide-debug.apk
 ```
 
 ---
