@@ -1,0 +1,63 @@
+class Strain {
+  final String id;
+  final String name;
+  final String? brand;
+  final String? strainType;
+  final double? thcPct;
+  final double? cbdPct;
+  final String? terpeneProfile;
+  final String? cannabinoidProfile;
+  final String? description;
+  final String? source;
+  final String? sourceType;
+  final String? createdAt;
+  final String? updatedAt;
+
+  const Strain({
+    required this.id,
+    required this.name,
+    this.brand,
+    this.strainType,
+    this.thcPct,
+    this.cbdPct,
+    this.terpeneProfile,
+    this.cannabinoidProfile,
+    this.description,
+    this.source,
+    this.sourceType,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory Strain.fromMap(Map<String, dynamic> m) => Strain(
+        id: m['id'] as String,
+        name: m['name'] as String,
+        brand: m['brand'] as String?,
+        strainType: m['strain_type'] as String?,
+        thcPct: (m['thc_pct'] as num?)?.toDouble(),
+        cbdPct: (m['cbd_pct'] as num?)?.toDouble(),
+        terpeneProfile: m['terpene_profile'] as String?,
+        cannabinoidProfile: m['cannabinoid_profile'] as String?,
+        description: m['description'] as String?,
+        source: m['source'] as String?,
+        sourceType: m['source_type'] as String?,
+        createdAt: m['created_at'] as String?,
+        updatedAt: m['updated_at'] as String?,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'brand': brand,
+        'strain_type': strainType,
+        'thc_pct': thcPct,
+        'cbd_pct': cbdPct,
+        'terpene_profile': terpeneProfile,
+        'cannabinoid_profile': cannabinoidProfile,
+        'description': description,
+        'source': source,
+        'source_type': sourceType,
+        'created_at': createdAt,
+        'updated_at': updatedAt,
+      };
+}
