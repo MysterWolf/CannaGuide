@@ -12,6 +12,7 @@ class Dispensary {
   final int? wouldGoBack;
   final String? createdAt;
   final String? stashpassOperatorId;
+  final String? notes;
 
   const Dispensary({
     required this.id,
@@ -27,6 +28,7 @@ class Dispensary {
     this.wouldGoBack,
     this.createdAt,
     this.stashpassOperatorId,
+    this.notes,
   });
 
   factory Dispensary.fromMap(Map<String, dynamic> m) => Dispensary(
@@ -43,6 +45,7 @@ class Dispensary {
         wouldGoBack: m['would_go_back'] as int?,
         createdAt: m['created_at'] as String?,
         stashpassOperatorId: m['stashpass_operator_id'] as String?,
+        notes: m['notes'] as String?,
       );
 
   Map<String, dynamic> toMap() => {
@@ -59,5 +62,6 @@ class Dispensary {
         'would_go_back': wouldGoBack,
         'created_at': createdAt,
         'stashpass_operator_id': stashpassOperatorId,
+        'notes': notes,
       };
 }

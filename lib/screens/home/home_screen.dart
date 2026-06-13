@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -39,12 +40,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontSize: 22,
                 ),
               ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.add, color: C.accent),
-                  onPressed: () {},
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Row(
+                  children: [
+                    _QuickAction(
+                      icon: Icons.spa_outlined,
+                      label: 'Log Session',
+                      onTap: () => context.push('/log-session'),
+                    ),
+                    const SizedBox(width: 8),
+                    _QuickAction(
+                      icon: Icons.local_florist_outlined,
+                      label: 'Add Strain',
+                      onTap: () => context.push('/add-strain'),
+                    ),
+                    const SizedBox(width: 8),
+                    _QuickAction(
+                      icon: Icons.storefront_outlined,
+                      label: 'Add Dispensary',
+                      onTap: () => context.push('/add-dispensary'),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             Consumer<SessionsProvider>(
               builder: (context, provider, _) {
@@ -90,6 +111,36 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QuickAction({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: C.accentLight,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: C.accent.withAlpha(60)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: C.accent, size: 22),
+                const SizedBox(height: 4),
+                Text(label, style: const TextStyle(color: C.accent, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 class _SessionCard extends StatelessWidget {

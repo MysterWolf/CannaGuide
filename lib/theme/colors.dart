@@ -36,6 +36,40 @@ abstract final class C {
   static const white = Color(0xFFFFFFFF);
 }
 
+ThemeData buildDarkTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: const Color(0xFF1C1510),
+    colorScheme: const ColorScheme.dark(
+      primary: C.accent,
+      onPrimary: C.white,
+      secondary: C.gold,
+      surface: Color(0xFF2A1E10),
+      onSurface: Color(0xFFF0E8DC),
+      outline: Color(0xFF4A3828),
+      error: C.danger,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFF1C1510),
+      foregroundColor: Color(0xFFF0E8DC),
+      elevation: 0,
+      scrolledUnderElevation: 0,
+    ),
+    dividerColor: const Color(0xFF4A3828),
+    textTheme: const TextTheme(
+      headlineLarge: TextStyle(color: Color(0xFFF0E8DC), fontWeight: FontWeight.w700),
+      headlineMedium: TextStyle(color: Color(0xFFF0E8DC), fontWeight: FontWeight.w600),
+      titleLarge: TextStyle(color: Color(0xFFF0E8DC), fontWeight: FontWeight.w600),
+      titleMedium: TextStyle(color: Color(0xFFF0E8DC), fontWeight: FontWeight.w500),
+      bodyLarge: TextStyle(color: Color(0xFFF0E8DC)),
+      bodyMedium: TextStyle(color: Color(0xFFF0E8DC)),
+      bodySmall: TextStyle(color: Color(0xFFB8A070)),
+      labelSmall: TextStyle(color: Color(0xFFB8A070)),
+    ),
+  );
+}
+
 ThemeData buildTheme() {
   return ThemeData(
     useMaterial3: true,

@@ -9,7 +9,7 @@ import 'models/strain.dart';
 
 class AppDatabase {
   static const _dbName = 'cannaguide.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   static Database? _db;
 
@@ -74,7 +74,10 @@ class AppDatabase {
         source TEXT DEFAULT 'manual',
         source_type TEXT,
         created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
+        updated_at TEXT DEFAULT (datetime('now')),
+        category TEXT,
+        notes TEXT,
+        dispensary_id TEXT
       )''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_strains_name ON strains(name)');
 
@@ -92,7 +95,8 @@ class AppDatabase {
         staff_rating INTEGER,
         would_go_back INTEGER DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now')),
-        stashpass_operator_id TEXT
+        stashpass_operator_id TEXT,
+        notes TEXT
       )''');
 
     await db.execute('''
@@ -301,6 +305,12 @@ class AppDatabase {
     if (oldVersion < 2) {
       await _createCirclesTables(db);
     }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE dispensaries ADD COLUMN notes TEXT');
+      await db.execute('ALTER TABLE strains ADD COLUMN category TEXT');
+      await db.execute('ALTER TABLE strains ADD COLUMN notes TEXT');
+      await db.execute('ALTER TABLE strains ADD COLUMN dispensary_id TEXT');
+    }
   }
 
   // ─── Strains ────────────────────────────────────────────────────────────────
@@ -345,8 +355,23 @@ class AppDatabase {
     return rows.map(Dispensary.fromMap).toList();
   }
 
+  static Future<Dispensary?> getDispensary(String id) async {
+    final rows = await (await db).query('dispensaries', where: 'id = ?', whereArgs: [id]);
+    return rows.isEmpty ? null : Dispensary.fromMap(rows.first);
+  }
+
   static Future<void> insertDispensary(Dispensary d) async =>
       (await db).insert('dispensaries', d.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<List<Map<String, dynamic>>> getSessionsForStrainId(String strainId) async =>
+      (await db).rawQuery(
+        'SELECT sess.*, str.name AS strain_name, str.strain_type, d.name AS dispensary_name '
+        'FROM sessions sess '
+        'LEFT JOIN strains str ON str.id = sess.strain_id '
+        'LEFT JOIN dispensaries d ON d.id = sess.dispensary_id '
+        'WHERE sess.strain_id = ? ORDER BY sess.session_at DESC',
+        [strainId],
+      );
 
   // ─── Circles ────────────────────────────────────────────────────────────────
 

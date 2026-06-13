@@ -3,24 +3,31 @@ import 'package:go_router/go_router.dart';
 
 import '../screens/home/home_screen.dart';
 import '../screens/discover/discover_screen.dart';
+import '../screens/discover/strain_detail_screen.dart';
+import '../screens/discover/dispensary_detail_screen.dart';
 import '../screens/circles/circles_screen.dart';
 import '../screens/circles/circle_detail_screen.dart';
 import '../screens/circles/create_circle_screen.dart';
 import '../screens/circles/share_to_circle_screen.dart';
 import '../screens/circles/join_circle_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/settings/settings_screen.dart';
+import '../screens/dispensary/add_dispensary_screen.dart';
+import '../screens/strain/add_strain_screen.dart';
+import '../screens/session/log_session_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 final _homeKey = GlobalKey<NavigatorState>();
 final _discoverKey = GlobalKey<NavigatorState>();
 final _circlesKey = GlobalKey<NavigatorState>();
 final _profileKey = GlobalKey<NavigatorState>();
+final _settingsKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
   navigatorKey: _rootKey,
   initialLocation: '/home',
   routes: [
-    // Deep link: cannaguide://circles/join?id=X&token=Y
+    // ── Global modal routes (float above all tabs) ──────────────────────────
     GoRoute(
       path: '/circles/join',
       parentNavigatorKey: _rootKey,
@@ -50,6 +57,34 @@ final appRouter = GoRouter(
         ),
       ],
     ),
+    GoRoute(
+      path: '/share',
+      parentNavigatorKey: _rootKey,
+      builder: (context, state) => ShareToCircleScreen(
+        preloadType: state.uri.queryParameters['type'],
+        preloadName: state.uri.queryParameters['name'],
+        preloadSub: state.uri.queryParameters['sub'],
+      ),
+    ),
+    GoRoute(
+      path: '/add-dispensary',
+      parentNavigatorKey: _rootKey,
+      builder: (context, _) => const AddDispensaryScreen(),
+    ),
+    GoRoute(
+      path: '/add-strain',
+      parentNavigatorKey: _rootKey,
+      builder: (context, _) => const AddStrainScreen(),
+    ),
+    GoRoute(
+      path: '/log-session',
+      parentNavigatorKey: _rootKey,
+      builder: (context, state) => LogSessionScreen(
+        preloadStrainId: state.uri.queryParameters['strainId'],
+      ),
+    ),
+
+    // ── Tab shell ────────────────────────────────────────────────────────────
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => _ScaffoldWithNav(shell: shell),
       branches: [
@@ -59,7 +94,22 @@ final appRouter = GoRouter(
         ),
         StatefulShellBranch(
           navigatorKey: _discoverKey,
-          routes: [GoRoute(path: '/discover', builder: (context, _) => const DiscoverScreen())],
+          routes: [
+            GoRoute(
+              path: '/discover',
+              builder: (context, _) => const DiscoverScreen(),
+              routes: [
+                GoRoute(
+                  path: 'strain/:id',
+                  builder: (context, state) => StrainDetailScreen(strainId: state.pathParameters['id']!),
+                ),
+                GoRoute(
+                  path: 'dispensary/:id',
+                  builder: (context, state) => DispensaryDetailScreen(dispensaryId: state.pathParameters['id']!),
+                ),
+              ],
+            ),
+          ],
         ),
         StatefulShellBranch(
           navigatorKey: _circlesKey,
@@ -68,6 +118,10 @@ final appRouter = GoRouter(
         StatefulShellBranch(
           navigatorKey: _profileKey,
           routes: [GoRoute(path: '/profile', builder: (context, _) => const ProfileScreen())],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _settingsKey,
+          routes: [GoRoute(path: '/settings', builder: (context, _) => const SettingsScreen())],
         ),
       ],
     ),
@@ -90,6 +144,7 @@ class _ScaffoldWithNav extends StatelessWidget {
           NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Discover'),
           NavigationDestination(icon: Icon(Icons.group_outlined), selectedIcon: Icon(Icons.group), label: 'Circles'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
     );

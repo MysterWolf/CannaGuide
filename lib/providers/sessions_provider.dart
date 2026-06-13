@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../db/database.dart';
+import '../db/models/session.dart';
 
 class SessionsProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _diary = [];
@@ -14,5 +15,10 @@ class SessionsProvider extends ChangeNotifier {
     _diary = await AppDatabase.getDiaryRows();
     _loading = false;
     notifyListeners();
+  }
+
+  Future<void> add(Session s) async {
+    await AppDatabase.insertSession(s);
+    await load();
   }
 }

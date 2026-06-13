@@ -6,14 +6,15 @@ import '../../providers/circles_provider.dart';
 import '../../theme/colors.dart';
 
 class ShareToCircleScreen extends StatefulWidget {
-  final String circleId;
+  /// If null, user selects a circle from their list.
+  final String? circleId;
   final String? preloadType;
   final String? preloadName;
   final String? preloadSub;
 
   const ShareToCircleScreen({
     super.key,
-    required this.circleId,
+    this.circleId,
     this.preloadType,
     this.preloadName,
     this.preloadSub,
@@ -25,6 +26,7 @@ class ShareToCircleScreen extends StatefulWidget {
 
 class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
   late String _type;
+  String? _selectedCircleId;
   final _nameCtrl = TextEditingController();
   final _subCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
@@ -34,16 +36,31 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
   void initState() {
     super.initState();
     _type = widget.preloadType ?? 'strain';
+    _selectedCircleId = widget.circleId;
     if (widget.preloadName != null) _nameCtrl.text = widget.preloadName!;
     if (widget.preloadSub != null) _subCtrl.text = widget.preloadSub!;
+    if (widget.circleId == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<CirclesProvider>().reload();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _subCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _share() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+    final targetId = _selectedCircleId;
+    if (name.isEmpty || targetId == null) return;
     setState(() => _sharing = true);
     await context.read<CirclesProvider>().addShare(
-          circleId: widget.circleId,
+          circleId: targetId,
           type: _type,
           payload: {'name': name, 'sub': _subCtrl.text.trim()},
           note: _noteCtrl.text.trim(),
@@ -53,6 +70,7 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool canPost = _nameCtrl.text.trim().isNotEmpty && _selectedCircleId != null;
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
@@ -61,8 +79,8 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
         leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.pop()),
         actions: [
           TextButton(
-            onPressed: _sharing ? null : _share,
-            child: Text('Post', style: TextStyle(color: _sharing ? C.muted : C.circles, fontWeight: FontWeight.w700)),
+            onPressed: (_sharing || !canPost) ? null : _share,
+            child: Text('Post', style: TextStyle(color: (_sharing || !canPost) ? C.muted : C.circles, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -71,6 +89,72 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Circle selector — only when circleId is not pre-set
+            if (widget.circleId == null) ...[
+              const Text('Circle', style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Consumer<CirclesProvider>(
+                builder: (context, circles, _) {
+                  if (!circles.hasProfile) {
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: C.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: C.border),
+                      ),
+                      child: const Text(
+                        'Set up your profile in the Circles tab first.',
+                        style: TextStyle(color: C.muted),
+                      ),
+                    );
+                  }
+                  if (circles.circles.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: C.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: C.border),
+                      ),
+                      child: const Text(
+                        'You\'re not in any circles yet. Create or join one first.',
+                        style: TextStyle(color: C.muted),
+                      ),
+                    );
+                  }
+                  return Column(
+                    children: circles.circles.map((c) {
+                      final id = c['id'] as String;
+                      final sel = id == _selectedCircleId;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedCircleId = id),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: sel ? C.circlesLt : C.surface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: sel ? C.circles : C.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(c['emoji'] as String? ?? '🌿', style: const TextStyle(fontSize: 22)),
+                              const SizedBox(width: 10),
+                              Text(c['name'] as String? ?? '', style: TextStyle(color: sel ? C.circles : C.text, fontWeight: sel ? FontWeight.w600 : FontWeight.normal)),
+                              const Spacer(),
+                              if (sel) const Icon(Icons.check_circle, color: C.circles, size: 20),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+
             const Text('Type', style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Row(
@@ -90,13 +174,21 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
               }).toList(),
             ),
             const SizedBox(height: 20),
-            Text(_type == 'strain' ? 'Strain name' : _type == 'dispensary' ? 'Dispensary name' : 'Product name',
-                style: const TextStyle(color: C.text, fontWeight: FontWeight.w600)),
+            Text(
+              _type == 'strain' ? 'Strain name' : _type == 'dispensary' ? 'Dispensary name' : 'Product name',
+              style: const TextStyle(color: C.text, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
-            TextField(controller: _nameCtrl, decoration: _dec('Name')),
+            TextField(
+              controller: _nameCtrl,
+              decoration: _dec('Name'),
+              onChanged: (_) => setState(() {}),
+            ),
             const SizedBox(height: 16),
-            Text(_type == 'strain' ? 'Brand (optional)' : _type == 'dispensary' ? 'City (optional)' : 'Brand (optional)',
-                style: const TextStyle(color: C.text, fontWeight: FontWeight.w600)),
+            Text(
+              _type == 'strain' ? 'Brand (optional)' : _type == 'dispensary' ? 'City (optional)' : 'Brand (optional)',
+              style: const TextStyle(color: C.text, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             TextField(controller: _subCtrl, decoration: _dec('Optional')),
             const SizedBox(height: 20),

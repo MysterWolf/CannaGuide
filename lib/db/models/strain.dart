@@ -12,6 +12,9 @@ class Strain {
   final String? sourceType;
   final String? createdAt;
   final String? updatedAt;
+  final String? category;
+  final String? notes;
+  final String? dispensaryId;
 
   const Strain({
     required this.id,
@@ -27,6 +30,9 @@ class Strain {
     this.sourceType,
     this.createdAt,
     this.updatedAt,
+    this.category,
+    this.notes,
+    this.dispensaryId,
   });
 
   factory Strain.fromMap(Map<String, dynamic> m) => Strain(
@@ -43,6 +49,9 @@ class Strain {
         sourceType: m['source_type'] as String?,
         createdAt: m['created_at'] as String?,
         updatedAt: m['updated_at'] as String?,
+        category: m['category'] as String?,
+        notes: m['notes'] as String?,
+        dispensaryId: m['dispensary_id'] as String?,
       );
 
   Map<String, dynamic> toMap() => {
@@ -59,5 +68,8 @@ class Strain {
         'source_type': sourceType,
         'created_at': createdAt,
         'updated_at': updatedAt,
+        'category': category,
+        'notes': notes,
+        'dispensary_id': dispensaryId,
       };
 }

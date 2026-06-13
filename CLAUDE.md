@@ -15,7 +15,7 @@ and tracking effects supports that goal; it is not the goal itself. Every featur
 should ask: *does this teach the user something?* Tracker features that don't teach do not
 belong in this app.
 
-**Current version:** 1.0.0+1  
+**Current version:** 1.0.2+1  
 **Package:** `com.mysterwolf.cannaguide`  
 **Repo:** https://github.com/MysterWolf/CannaGuide (branch: master)  
 **APK output:** `build/app/outputs/flutter-apk/app-release.apk`
@@ -44,26 +44,34 @@ belong in this app.
 ```
 lib/
 ├── main.dart               — WidgetsFlutterBinding, DB pre-open, runApp
-├── app.dart                — MultiProvider + MaterialApp.router + buildTheme()
+├── app.dart                — MultiProvider + Consumer<Settings> MaterialApp.router
 ├── theme/
-│   └── colors.dart         — C{} constants + buildTheme()
+│   └── colors.dart         — C{} constants + buildTheme() + buildDarkTheme()
 ├── router/
-│   └── router.dart         — go_router StatefulShellRoute (4 branches)
+│   └── router.dart         — go_router StatefulShellRoute (5 branches)
 ├── db/
 │   ├── database.dart       — AppDatabase singleton; copies backup on first launch
 │   └── models/
-│       ├── strain.dart
+│       ├── strain.dart     — +category, +notes, +dispensaryId (v3)
 │       ├── session.dart
-│       └── dispensary.dart
+│       └── dispensary.dart — +notes (v3)
 ├── providers/
-│   ├── sessions_provider.dart
-│   ├── strains_provider.dart
-│   └── settings_provider.dart
+│   ├── sessions_provider.dart    — add()
+│   ├── strains_provider.dart     — add()
+│   ├── dispensaries_provider.dart — load(), add()
+│   ├── settings_provider.dart    — +themeMode
+│   └── circles_provider.dart
 ├── screens/
-│   ├── home/home_screen.dart       — session diary list
-│   ├── discover/discover_screen.dart — strain browser
-│   ├── circles/circles_screen.dart  — stub
-│   └── profile/profile_screen.dart  — AI effect profile stub
+│   ├── home/home_screen.dart           — quick actions + session diary
+│   ├── discover/discover_screen.dart   — Strains|Dispensaries tabs + filters
+│   ├── discover/strain_detail_screen.dart
+│   ├── discover/dispensary_detail_screen.dart
+│   ├── circles/                        — full Circles feature
+│   ├── session/log_session_screen.dart — full session log form
+│   ├── strain/add_strain_screen.dart
+│   ├── dispensary/add_dispensary_screen.dart
+│   ├── settings/settings_screen.dart   — profile, theme, tier, version
+│   └── profile/profile_screen.dart     — AI effect profile stub
 └── services/
     ├── claude_service.dart         — Claude API wrapper (gated)
     └── revenue_cat_service.dart    — RevenueCat IAP scaffold
@@ -73,14 +81,26 @@ lib/
 
 ## Navigation
 
-go_router `StatefulShellRoute.indexedStack` — 4 branches, persistent state per tab:
+go_router `StatefulShellRoute.indexedStack` — 5 branches, persistent state per tab:
 
 | Branch | Route | Screen |
 |--------|-------|--------|
-| 0 | `/home` | HomeScreen — session diary |
-| 1 | `/discover` | DiscoverScreen — strain browser |
-| 2 | `/circles` | CirclesScreen — social (stub) |
+| 0 | `/home` | HomeScreen — quick actions + session diary |
+| 1 | `/discover` | DiscoverScreen — strain/dispensary browser |
+| 2 | `/circles` | CirclesScreen — social feature |
 | 3 | `/profile` | ProfileScreen — AI effect profile (stub) |
+| 4 | `/settings` | SettingsScreen — display name, avatar, theme, tier, version |
+
+**Global modal routes** (parentNavigatorKey: _rootKey, float above all tabs):
+- `/log-session?strainId=X` → LogSessionScreen
+- `/add-strain` → AddStrainScreen
+- `/add-dispensary` → AddDispensaryScreen
+- `/share?type=X&name=Y&sub=Z` → ShareToCircleScreen (circle selector)
+- `/circles/create`, `/circles/:id`, `/circles/:id/share`, `/circles/join`
+
+**Discover sub-routes** (within discover branch):
+- `/discover/strain/:id` → StrainDetailScreen
+- `/discover/dispensary/:id` → DispensaryDetailScreen
 
 Bottom `NavigationBar` tab indices map 1:1 to branch indices. Use `shell.goBranch(i, initialLocation: i == shell.currentIndex)` to preserve branch state.
 
@@ -129,7 +149,7 @@ C.white       #FFFFFF
 
 ## Database (`lib/db/database.dart`)
 
-sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`.
+sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **3**.
 
 **First-launch migration:** On first launch (db file absent), `AppDatabase._open()` copies `assets/cannaguide_backup.db` to the database path before `openDatabase`. This preserved 10 strains, 10 sessions, 3 dispensaries from the RN version.
 
@@ -159,11 +179,14 @@ sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`.
 
 | Provider | What it holds |
 |---|---|
-| `SessionsProvider` | `List<Map>` from `v_diary` |
-| `StrainsProvider` | `List<Strain>` |
-| `SettingsProvider` | Claude API key, user tier — persisted in SharedPreferences |
+| `SessionsProvider` | `List<Map>` from `v_diary`; `add(Session)` inserts + reloads |
+| `StrainsProvider` | `List<Strain>`; `add(Strain)` inserts + reloads |
+| `DispensariesProvider` | `List<Dispensary>`; `add(Dispensary)` inserts + reloads |
+| `SettingsProvider` | Claude API key, user tier, `ThemeMode` — persisted in SharedPreferences |
+| `CirclesProvider` | Local user identity (UUID + display name + avatar); all Circles CRUD |
 
 All providers loaded lazily on first screen visit. `SettingsProvider` auto-loads on construction.
+Display name and avatar are owned by `CirclesProvider.profile` — Settings screen writes via `CirclesProvider.saveProfile()`.
 
 ---
 
@@ -220,6 +243,21 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ## Changelog
 
+### v1.0.2 — Core features (2026-06-13)
+- DB: bumped to version 3; added `notes TEXT` to `dispensaries`, `category TEXT` + `notes TEXT` + `dispensary_id TEXT` to `strains` via `_onUpgrade`
+- Nav: 5-tab bottom nav — Home, Discover, Circles, Profile, **Settings**
+- Settings screen: display name + avatar (via CirclesProvider), light/dark/system theme toggle (SegmentedButton), tier placeholder, app version
+- Theme: `buildDarkTheme()` added to `colors.dart`; `MaterialApp.router` wired to `SettingsProvider.themeMode` via Consumer
+- Home screen: quick action row — "Log Session", "Add Strain", "Add Dispensary" (warm tinted cards)
+- Discover tab rewrite: Strains | Dispensaries segmented tabs, filter chips (type/venue), tap → detail screens, FAB label changes per tab
+- StrainDetailScreen: header card, session count + avg rating stats, terpene notes, session history, "Log Session" + "Share to Circle" buttons
+- DispensaryDetailScreen: header card, venue type + price tier chips, notes, "Share to Circle" button
+- AddDispensaryScreen: name, city/state, venue_type (5 choices), price_tier (3 choices), notes → `dispensaries` table
+- AddStrainScreen: name, brand, type (sativa/indica/hybrid), category (8 choices), source dispensary picker, notes → `strains` table
+- LogSessionScreen: strain picker (search sheet), dispensary picker, category, time of day, setting, 5-star overall rating, 7 optional effect sliders (1-10) with enable/disable toggle, duration, notes → `sessions` table
+- ShareToCircleScreen: `circleId` now nullable; when null shows circle selector at top (for sharing from detail screens); route `/share?type=X&name=Y&sub=Z` added as global modal
+- Providers: `SessionsProvider.add()`, `StrainsProvider.add()`, `DispensariesProvider` (new) with `load()` + `add()`
+
 ### v1.0.1 — Circles feature (2026-06-13)
 - DB: bumped to version 2; added 6 Circles tables (`circles`, `circle_members`, `circle_shares`, `circle_reactions`, `circle_comments`, `pending_requests`) via `_onUpgrade` for existing installs
 - Provider: `CirclesProvider` — local user identity (UUID + display name + avatar in SharedPreferences); full CRUD for circles, members, shares, reactions, comments, pending requests
@@ -237,8 +275,8 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| 1 | Core browse + education — product categories, strain detail, terpene profiles | Next |
-| 2 | Log session flow — full LogSessionScreen in Flutter | Next |
+| 1 | Core browse + education — strain detail, terpene profiles | **Done 2026-06-13** |
+| 2 | Log session flow — full LogSessionScreen | **Done 2026-06-13** |
 | 3 | AI effect profile — Claude integration, ProfileScreen | Planned |
 | 4 | Circles — sqflite data layer, full 4-screen feature | **Done 2026-06-13** |
 | 5 | StashPass integration — wallet, check-in, operator profiles | Planned |
