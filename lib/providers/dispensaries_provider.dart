@@ -21,4 +21,9 @@ class DispensariesProvider extends ChangeNotifier {
     await AppDatabase.insertDispensary(d);
     await load();
   }
+
+  Future<void> update(Dispensary d) async {
+    await AppDatabase.updateDispensary(d);
+    await load();
+  }
 }

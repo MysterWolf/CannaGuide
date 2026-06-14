@@ -67,6 +67,25 @@ ThemeData buildDarkTheme() {
       bodySmall: TextStyle(color: Color(0xFFB8A070)),
       labelSmall: TextStyle(color: Color(0xFFB8A070)),
     ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: const Color(0xFF251A0E),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      hintStyle: const TextStyle(color: Color(0xFF8A7060)),
+      labelStyle: const TextStyle(color: Color(0xFFF0E8DC), fontWeight: FontWeight.w500),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF4A3828)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF4A3828)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: C.accent),
+      ),
+    ),
   );
 }
 
@@ -108,6 +127,25 @@ ThemeData buildTheme() {
       bodyMedium: TextStyle(color: C.text),
       bodySmall: TextStyle(color: C.muted),
       labelSmall: TextStyle(color: C.muted),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: C.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      hintStyle: const TextStyle(color: C.muted),
+      labelStyle: const TextStyle(color: C.text, fontWeight: FontWeight.w500),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: C.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: C.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: C.accent),
+      ),
     ),
   );
 }

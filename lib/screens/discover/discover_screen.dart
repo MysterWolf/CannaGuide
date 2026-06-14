@@ -348,6 +348,10 @@ class _DispensaryCard extends StatelessWidget {
                     },
                     style: const TextStyle(color: C.light, fontSize: 12),
                   ),
+                if (d.staffRating != null)
+                  _MiniStars(label: 'Staff', rating: d.staffRating!),
+                if (d.vibeRating != null)
+                  _MiniStars(label: 'Vibe', rating: d.vibeRating!),
               ],
             ),
             const SizedBox(width: 4),
@@ -355,6 +359,28 @@ class _DispensaryCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MiniStars extends StatelessWidget {
+  final String label;
+  final int rating;
+
+  const _MiniStars({required this.label, required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('$label ', style: const TextStyle(color: C.light, fontSize: 10)),
+        ...List.generate(5, (i) => Icon(
+          i < rating ? Icons.star : Icons.star_border,
+          size: 10,
+          color: C.gold,
+        )),
+      ],
     );
   }
 }

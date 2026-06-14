@@ -81,6 +81,7 @@ final appRouter = GoRouter(
       parentNavigatorKey: _rootKey,
       builder: (context, state) => LogSessionScreen(
         preloadStrainId: state.uri.queryParameters['strainId'],
+        sessionId: state.uri.queryParameters['sessionId'],
       ),
     ),
 
@@ -106,6 +107,12 @@ final appRouter = GoRouter(
                 GoRoute(
                   path: 'dispensary/:id',
                   builder: (context, state) => DispensaryDetailScreen(dispensaryId: state.pathParameters['id']!),
+                  routes: [
+                    GoRoute(
+                      path: 'edit',
+                      builder: (context, state) => AddDispensaryScreen(dispensaryId: state.pathParameters['id']),
+                    ),
+                  ],
                 ),
               ],
             ),

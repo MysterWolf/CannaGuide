@@ -209,10 +209,9 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
 
   InputDecoration _dec(String hint) => InputDecoration(
         hintText: hint,
-        filled: true,
-        fillColor: C.surface,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.circles)),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: C.circles),
+        ),
       );
 }

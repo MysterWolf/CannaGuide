@@ -9,7 +9,7 @@ import 'models/strain.dart';
 
 class AppDatabase {
   static const _dbName = 'cannaguide.db';
-  static const _dbVersion = 3;
+  static const _dbVersion = 4;
 
   static Database? _db;
 
@@ -311,6 +311,12 @@ class AppDatabase {
       await db.execute('ALTER TABLE strains ADD COLUMN notes TEXT');
       await db.execute('ALTER TABLE strains ADD COLUMN dispensary_id TEXT');
     }
+    if (oldVersion < 4) {
+      // These columns exist in most installs (original RN schema + _onCreate);
+      // swallow errors for users who already have them.
+      try { await db.execute('ALTER TABLE dispensaries ADD COLUMN staff_rating INTEGER'); } catch (_) {}
+      try { await db.execute('ALTER TABLE dispensaries ADD COLUMN vibe_rating INTEGER'); } catch (_) {}
+    }
   }
 
   // ─── Strains ────────────────────────────────────────────────────────────────
@@ -345,8 +351,19 @@ class AppDatabase {
     );
   }
 
+  static Future<Session?> getSession(String id) async {
+    final rows = await (await db).query('sessions', where: 'id = ?', whereArgs: [id]);
+    return rows.isEmpty ? null : Session.fromMap(rows.first);
+  }
+
   static Future<void> insertSession(Session s) async =>
       (await db).insert('sessions', s.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<void> updateSession(Session s) async =>
+      (await db).update('sessions', s.toMap(), where: 'id = ?', whereArgs: [s.id]);
+
+  static Future<void> deleteSession(String id) async =>
+      (await db).delete('sessions', where: 'id = ?', whereArgs: [id]);
 
   // ─── Dispensaries ────────────────────────────────────────────────────────────
 
@@ -362,6 +379,9 @@ class AppDatabase {
 
   static Future<void> insertDispensary(Dispensary d) async =>
       (await db).insert('dispensaries', d.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<void> updateDispensary(Dispensary d) async =>
+      (await db).update('dispensaries', d.toMap(), where: 'id = ?', whereArgs: [d.id]);
 
   static Future<List<Map<String, dynamic>>> getSessionsForStrainId(String strainId) async =>
       (await db).rawQuery(
@@ -417,6 +437,11 @@ class AppDatabase {
     return share['id'] as String;
   }
 
+  static Future<Map<String, dynamic>?> getShareById(String id) async {
+    final rows = await (await db).query('circle_shares', where: 'id = ?', whereArgs: [id]);
+    return rows.isNotEmpty ? rows.first : null;
+  }
+
   static Future<List<Map<String, dynamic>>> getReactions(String shareId) async =>
       (await db).query('circle_reactions', where: 'share_id = ?', whereArgs: [shareId]);
 
@@ -457,6 +482,32 @@ class AppDatabase {
 
   static Future<void> deletePendingRequest(String circleId, String userId) async =>
       (await db).delete('pending_requests', where: 'circle_id = ? AND user_id = ?', whereArgs: [circleId, userId]);
+
+  static Future<void> deleteCircleAndRelated(String circleId) async {
+    final d = await db;
+    await d.rawDelete(
+      'DELETE FROM circle_reactions WHERE share_id IN (SELECT id FROM circle_shares WHERE circle_id = ?)',
+      [circleId],
+    );
+    await d.rawDelete(
+      'DELETE FROM circle_comments WHERE share_id IN (SELECT id FROM circle_shares WHERE circle_id = ?)',
+      [circleId],
+    );
+    await d.delete('circle_shares', where: 'circle_id = ?', whereArgs: [circleId]);
+    await d.delete('circle_members', where: 'circle_id = ?', whereArgs: [circleId]);
+    await d.delete('pending_requests', where: 'circle_id = ?', whereArgs: [circleId]);
+    await d.delete('circles', where: 'id = ?', whereArgs: [circleId]);
+  }
+
+  // Returns true if the reaction was newly inserted (not already present)
+  static Future<bool> insertReactionIfNew(Map<String, dynamic> reaction) async {
+    final rowId = await (await db).insert(
+      'circle_reactions',
+      reaction,
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+    return rowId != 0;
+  }
 
   // ─── Counts ─────────────────────────────────────────────────────────────────
 

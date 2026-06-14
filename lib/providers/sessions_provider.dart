@@ -21,4 +21,14 @@ class SessionsProvider extends ChangeNotifier {
     await AppDatabase.insertSession(s);
     await load();
   }
+
+  Future<void> update(Session s) async {
+    await AppDatabase.updateSession(s);
+    await load();
+  }
+
+  Future<void> delete(String id) async {
+    await AppDatabase.deleteSession(id);
+    await load();
+  }
 }

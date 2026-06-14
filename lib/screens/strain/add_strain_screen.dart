@@ -12,7 +12,7 @@ import '../../theme/colors.dart';
 const _uuid = Uuid();
 
 const _strainTypes = ['sativa', 'indica', 'hybrid'];
-const _categories = ['Flower', 'Vape', 'Pre-Roll', 'Concentrate', 'Edible', 'Tincture', 'Topical', 'Other'];
+const _categories = ['Flower', 'Vape', 'Pre-Roll', 'Concentrate', 'Edible', 'Tincture', 'Topical', 'Shots & Nano', 'Other'];
 
 class AddStrainScreen extends StatefulWidget {
   const AddStrainScreen({super.key});
@@ -78,7 +78,7 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
         title: 'Source dispensary',
         items: dispensaries,
         labelOf: (d) => d.name,
-        subtitleOf: (d) => d.city,
+        subtitleOf: (d) => d.venueType,
         selected: _dispensary,
       ),
     );
@@ -208,7 +208,11 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _dispensary?.name ?? 'Select dispensary',
+                        _dispensary == null
+                            ? 'Select dispensary'
+                            : (_dispensary!.venueType != null && _dispensary!.venueType!.isNotEmpty
+                                ? '${_dispensary!.name} · ${_dispensary!.venueType}'
+                                : _dispensary!.name),
                         style: TextStyle(color: _dispensary != null ? C.text : C.light),
                       ),
                     ),
@@ -258,16 +262,7 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
 
   Widget _label(String text) => Text(text, style: const TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14));
 
-  InputDecoration _dec(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: C.light),
-        filled: true,
-        fillColor: C.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.accent)),
-      );
+  InputDecoration _dec(String hint) => InputDecoration(hintText: hint);
 }
 
 class _PickerSheet<T> extends StatelessWidget {

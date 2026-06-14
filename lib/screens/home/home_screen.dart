@@ -149,6 +149,7 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sessionId = row['id'] as String? ?? '';
     final strainName = row['strain_name'] as String? ?? 'Unknown strain';
     final brand = row['strain_brand'] as String?;
     final dispensaryName = row['dispensary_name'] as String?;
@@ -171,7 +172,9 @@ class _SessionCard extends StatelessWidget {
       _ => C.muted,
     };
 
-    return Container(
+    return GestureDetector(
+      onTap: () => context.push('/log-session?sessionId=$sessionId'),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -249,6 +252,7 @@ class _SessionCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
       ),
     );
   }

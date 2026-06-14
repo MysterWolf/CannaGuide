@@ -81,6 +81,13 @@ class _DispensaryDetailScreenState extends State<DispensaryDetailScreen> {
             ),
             actions: [
               IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => context
+                    .push('/discover/dispensary/${d.id}/edit')
+                    .then((_) => _load()),
+                tooltip: 'Edit',
+              ),
+              IconButton(
                 icon: const Icon(Icons.share_outlined),
                 onPressed: () => context.push(
                   Uri(
@@ -149,6 +156,29 @@ class _DispensaryDetailScreenState extends State<DispensaryDetailScreen> {
 
                   const SizedBox(height: 20),
 
+                  // Ratings
+                  if (d.staffRating != null || d.vibeRating != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: C.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: C.border),
+                      ),
+                      child: Column(
+                        children: [
+                          if (d.staffRating != null)
+                            _RatingRow(label: 'Staff Knowledge', rating: d.staffRating!),
+                          if (d.staffRating != null && d.vibeRating != null)
+                            const SizedBox(height: 10),
+                          if (d.vibeRating != null)
+                            _RatingRow(label: 'Vibe', rating: d.vibeRating!),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   // Details
                   if (d.notes != null && d.notes!.isNotEmpty) ...[
                     const Text('Notes', style: TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14)),
@@ -197,6 +227,32 @@ class _DispensaryDetailScreenState extends State<DispensaryDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _RatingRow extends StatelessWidget {
+  final String label;
+  final int rating;
+
+  const _RatingRow({required this.label, required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(label, style: const TextStyle(color: C.muted, fontSize: 13)),
+        ),
+        ...List.generate(5, (i) => Icon(
+          i < rating ? Icons.star : Icons.star_border,
+          size: 18,
+          color: C.gold,
+        )),
+        const SizedBox(width: 6),
+        Text('$rating / 5', style: const TextStyle(color: C.muted, fontSize: 12)),
+      ],
     );
   }
 }

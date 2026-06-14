@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../db/database.dart';
 import '../../db/models/dispensary.dart';
 import '../../providers/dispensaries_provider.dart';
 import '../../theme/colors.dart';
@@ -24,7 +25,10 @@ const _priceTiers = [
 ];
 
 class AddDispensaryScreen extends StatefulWidget {
-  const AddDispensaryScreen({super.key});
+  final String? dispensaryId;
+  const AddDispensaryScreen({super.key, this.dispensaryId});
+
+  bool get isEditing => dispensaryId != null;
 
   @override
   State<AddDispensaryScreen> createState() => _AddDispensaryScreenState();
@@ -37,7 +41,38 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
   final _notesCtrl = TextEditingController();
   String _venueType = 'dispensary';
   String _priceTier = 'mid';
+  int? _staffRating;
+  int? _vibeRating;
   bool _saving = false;
+  bool _loading = false;
+  Dispensary? _existing;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing) _loadExisting();
+  }
+
+  Future<void> _loadExisting() async {
+    setState(() => _loading = true);
+    final d = await AppDatabase.getDispensary(widget.dispensaryId!);
+    if (d != null && mounted) {
+      _existing = d;
+      _nameCtrl.text = d.name;
+      _cityCtrl.text = d.city ?? '';
+      _stateCtrl.text = d.state ?? '';
+      _notesCtrl.text = d.notes ?? '';
+      setState(() {
+        _venueType = d.venueType ?? 'dispensary';
+        _priceTier = d.priceTier ?? 'mid';
+        _staffRating = d.staffRating;
+        _vibeRating = d.vibeRating;
+        _loading = false;
+      });
+    } else if (mounted) {
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -53,26 +88,44 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
     if (name.isEmpty) return;
     setState(() => _saving = true);
     final d = Dispensary(
-      id: _uuid.v4(),
+      id: _existing?.id ?? _uuid.v4(),
       name: name,
       city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
       state: _stateCtrl.text.trim().isEmpty ? null : _stateCtrl.text.trim(),
       venueType: _venueType,
       priceTier: _priceTier,
+      staffRating: _staffRating,
+      vibeRating: _vibeRating,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      wouldGoBack: 1,
+      wouldGoBack: _existing?.wouldGoBack ?? 1,
+      stashpassOperatorId: _existing?.stashpassOperatorId,
     );
-    await context.read<DispensariesProvider>().add(d);
+    final provider = context.read<DispensariesProvider>();
+    if (widget.isEditing) {
+      await provider.update(d);
+    } else {
+      await provider.add(d);
+    }
     if (mounted) context.pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: C.bg,
+        body: Center(child: CircularProgressIndicator(color: C.accent)),
+      );
+    }
+
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
-        title: const Text('Add Dispensary', style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),
+        title: Text(
+          widget.isEditing ? 'Edit Dispensary' : 'Add Dispensary',
+          style: const TextStyle(color: C.text, fontWeight: FontWeight.w600),
+        ),
         leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.pop()),
         actions: [
           TextButton(
@@ -90,7 +143,7 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
             const SizedBox(height: 6),
             TextField(
               controller: _nameCtrl,
-              autofocus: true,
+              autofocus: !widget.isEditing,
               decoration: _dec('e.g. Green Leaf Dispensary'),
             ),
 
@@ -150,6 +203,22 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
             ),
 
             const SizedBox(height: 20),
+            _label('Staff Knowledge'),
+            const SizedBox(height: 8),
+            _StarRow(
+              rating: _staffRating,
+              onChanged: (v) => setState(() => _staffRating = v),
+            ),
+
+            const SizedBox(height: 20),
+            _label('Vibe'),
+            const SizedBox(height: 8),
+            _StarRow(
+              rating: _vibeRating,
+              onChanged: (v) => setState(() => _vibeRating = v),
+            ),
+
+            const SizedBox(height: 20),
             _label('Notes (optional)'),
             const SizedBox(height: 6),
             TextField(
@@ -170,7 +239,10 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
                 ),
                 child: _saving
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Save Dispensary', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    : Text(
+                        widget.isEditing ? 'Save Changes' : 'Save Dispensary',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ],
@@ -181,14 +253,32 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
 
   Widget _label(String text) => Text(text, style: const TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14));
 
-  InputDecoration _dec(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: C.light),
-        filled: true,
-        fillColor: C.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.accent)),
-      );
+  InputDecoration _dec(String hint) => InputDecoration(hintText: hint);
+}
+
+class _StarRow extends StatelessWidget {
+  final int? rating;
+  final ValueChanged<int?> onChanged;
+
+  const _StarRow({required this.rating, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        ...List.generate(5, (i) {
+          final filled = rating != null && i < rating!;
+          return GestureDetector(
+            onTap: () => onChanged(rating == i + 1 ? null : i + 1),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(filled ? Icons.star : Icons.star_border, size: 32, color: C.gold),
+            ),
+          );
+        }),
+        if (rating != null)
+          Text('$rating / 5', style: const TextStyle(color: C.muted, fontSize: 13)),
+      ],
+    );
+  }
 }

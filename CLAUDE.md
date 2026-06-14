@@ -15,7 +15,7 @@ and tracking effects supports that goal; it is not the goal itself. Every featur
 should ask: *does this teach the user something?* Tracker features that don't teach do not
 belong in this app.
 
-**Current version:** 1.0.2+1  
+**Current version:** 1.0.3+1  
 **Package:** `com.mysterwolf.cannaguide`  
 **Repo:** https://github.com/MysterWolf/CannaGuide (branch: master)  
 **APK output:** `build/app/outputs/flutter-apk/app-release.apk`
@@ -149,7 +149,7 @@ C.white       #FFFFFF
 
 ## Database (`lib/db/database.dart`)
 
-sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **3**.
+sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **4**.
 
 **First-launch migration:** On first launch (db file absent), `AppDatabase._open()` copies `assets/cannaguide_backup.db` to the database path before `openDatabase`. This preserved 10 strains, 10 sessions, 3 dispensaries from the RN version.
 
@@ -161,7 +161,7 @@ sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **3*
 |---|---|
 | `strains` | Strain catalog — name, brand, strain_type, thc_pct, terpene_profile |
 | `sessions` | Session log — effects (1-10), overall_rating (1-5), product_category, mg_thc/cbd |
-| `dispensaries` | Dispensary list — venue_type, vibe_rating, price_tier, stashpass_operator_id |
+| `dispensaries` | Dispensary list — venue_type, vibe_rating, staff_rating, price_tier, stashpass_operator_id |
 | `inventory` | Strain × dispensary in-stock status |
 | `wishlist` | Saved strains |
 | `recommendations` | AI recommendation results |
@@ -171,7 +171,7 @@ sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **3*
 | `v_diary` (view) | Sessions joined to strains + dispensaries, ordered DESC |
 | `v_strain_ratings` (view) | Strains with avg effect scores across sessions |
 
-**Migration pattern:** Add new columns with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` inside `_onUpgrade`, never in the base `_onCreate`.
+**Migration pattern:** Add new columns with try/catch-wrapped `ALTER TABLE ... ADD COLUMN` inside `_onUpgrade`, never in the base `_onCreate`. SQLite doesn't support `IF NOT EXISTS` on ALTER TABLE — wrap each column addition in try/catch to handle pre-existing columns safely.
 
 ---
 
@@ -242,6 +242,13 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 ---
 
 ## Changelog
+
+### v1.0.3 — Dispensary ratings + icon (2026-06-13)
+- DB: bumped to version 4; defensive migration adds `staff_rating INTEGER` + `vibe_rating INTEGER` to `dispensaries` (columns pre-existed in RN schema; wrapped in try/catch)
+- AddDispensaryScreen: "Staff Knowledge" and "Vibe" 5-star rating widgets (optional); saved with dispensary record
+- DispensaryDetailScreen: ratings section shows Staff Knowledge + Vibe stars when set
+- DiscoverScreen `_DispensaryCard`: compact mini star rows for staff/vibe ratings when set
+- App icon: replaced placeholder with original RN logo (1024×1024 source, scaled to all mipmap densities)
 
 ### v1.0.2 — Core features (2026-06-13)
 - DB: bumped to version 3; added `notes TEXT` to `dispensaries`, `category TEXT` + `notes TEXT` + `dispensary_id TEXT` to `strains` via `_onUpgrade`

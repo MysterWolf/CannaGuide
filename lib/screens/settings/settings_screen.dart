@@ -228,15 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  InputDecoration _inputDec(String hint) => InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: C.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.accent)),
-      );
+  InputDecoration _inputDec(String hint) => InputDecoration(hintText: hint);
 }
 
 class _SectionHeader extends StatelessWidget {

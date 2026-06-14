@@ -19,6 +19,7 @@ class _JoinCircleScreenState extends State<JoinCircleScreen> {
   JoinResult? _result;
   bool _loading = true;
   bool _requesting = false;
+  final _nameCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -26,19 +27,38 @@ class _JoinCircleScreenState extends State<JoinCircleScreen> {
     _lookup();
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _lookup() async {
     final provider = context.read<CirclesProvider>();
     await provider.init();
-    final circle = await provider.getCircle(widget.circleId);
-    setState(() {
-      _circle = circle;
-      _loading = false;
-    });
+    _nameCtrl.text = provider.profile?.displayName ?? '';
+    try {
+      final circle = await provider.getCircleByToken(widget.token);
+      setState(() { _circle = circle; _loading = false; });
+    } catch (_) {
+      setState(() { _circle = null; _loading = false; });
+    }
   }
 
   Future<void> _request() async {
+    final displayName = _nameCtrl.text.trim();
+    if (displayName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your name.')),
+      );
+      return;
+    }
     setState(() => _requesting = true);
-    final result = await context.read<CirclesProvider>().requestToJoin(widget.circleId, widget.token);
+    final provider = context.read<CirclesProvider>();
+    final result = await provider.requestToJoin(widget.circleId, widget.token, displayName);
+    if (result == JoinResult.requested && _circle != null) {
+      await provider.saveJoinedCircle(_circle!, displayName);
+    }
     setState(() {
       _result = result;
       _requesting = false;
@@ -51,7 +71,7 @@ class _JoinCircleScreenState extends State<JoinCircleScreen> {
       return const Scaffold(backgroundColor: C.bg, body: Center(child: CircularProgressIndicator(color: C.circles)));
     }
 
-    if (_circle == null || _circle!['invite_token'] != widget.token) {
+    if (_circle == null) {
       return Scaffold(
         backgroundColor: C.bg,
         appBar: AppBar(backgroundColor: C.bg, leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/circles'))),
@@ -82,6 +102,25 @@ class _JoinCircleScreenState extends State<JoinCircleScreen> {
             const Text('The circle owner will approve your request.', style: TextStyle(color: C.muted, fontSize: 15), textAlign: TextAlign.center),
             const SizedBox(height: 32),
             if (_result == null) ...[
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Your name', style: TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _nameCtrl,
+                decoration: InputDecoration(
+                  hintText: 'How you\'ll appear to members',
+                  hintStyle: const TextStyle(color: C.muted),
+                  filled: true,
+                  fillColor: C.surface,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.circles)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
@@ -115,11 +154,12 @@ class _ResultBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, msg, color) = switch (result) {
-      JoinResult.requested => (Icons.check_circle, 'Request sent! Waiting for owner approval.', C.circles),
+      JoinResult.requested => (Icons.check_circle, 'You\'re in! Share the circle with others using the invite link.', C.circles),
       JoinResult.alreadyMember => (Icons.group, 'You\'re already a member.', C.sage),
       JoinResult.pending => (Icons.hourglass_empty, 'You already have a pending request.', C.amber),
       JoinResult.invalidToken => (Icons.error_outline, 'Invalid invite token.', C.danger),
       JoinResult.needsProfile => (Icons.person_outline, 'Set up your Circles profile first.', C.muted),
+      JoinResult.networkError => (Icons.wifi_off, 'Network error. Check your connection and try again.', C.muted),
     };
     return Container(
       padding: const EdgeInsets.all(16),

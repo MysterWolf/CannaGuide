@@ -172,13 +172,7 @@ class _ProfileSetupState extends State<_ProfileSetup> {
               const SizedBox(height: 8),
               TextField(
                 controller: _ctrl,
-                decoration: InputDecoration(
-                  hintText: 'Your name',
-                  filled: true,
-                  fillColor: C.surface,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-                ),
+                decoration: const InputDecoration(hintText: 'Your name'),
               ),
               const SizedBox(height: 24),
               const Text('Choose an avatar', style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),

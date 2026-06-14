@@ -20,7 +20,6 @@ class CircleDetailScreen extends StatefulWidget {
 class _CircleDetailScreenState extends State<CircleDetailScreen> {
   Map<String, dynamic>? _circle;
   List<Map<String, dynamic>> _shares = [];
-  List<Map<String, dynamic>> _pendingRequests = [];
   bool _loading = true;
   String? _myUserId;
 
@@ -35,18 +34,42 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
     _myUserId = provider.profile?.userId;
     final circle = await provider.getCircle(widget.circleId);
     final shares = await provider.getShares(widget.circleId);
-    final pending = await provider.getPendingRequests(widget.circleId);
     if (mounted) {
       setState(() {
         _circle = circle;
         _shares = shares;
-        _pendingRequests = pending;
         _loading = false;
       });
     }
   }
 
   bool get _isOwner => _circle?['owner_id'] == _myUserId;
+
+  void _confirmDelete() {
+    final name = _circle?['name'] as String? ?? 'this circle';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.surface,
+        title: const Text('Delete Circle', style: TextStyle(color: C.text, fontWeight: FontWeight.w700)),
+        content: Text('Delete "$name"? This removes all shares and cannot be undone.', style: const TextStyle(color: C.muted)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: C.muted)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await context.read<CirclesProvider>().deleteCircle(widget.circleId);
+              if (mounted) context.go('/circles');
+            },
+            child: const Text('Delete', style: TextStyle(color: C.danger, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showInviteModal() async {
     final link = await context.read<CirclesProvider>().getInviteLink(widget.circleId);
@@ -107,64 +130,6 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
     );
   }
 
-  void _showPendingModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: C.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModal) => Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Pending Requests (${_pendingRequests.length})', style: const TextStyle(color: C.text, fontWeight: FontWeight.w700, fontSize: 18)),
-              const SizedBox(height: 16),
-              if (_pendingRequests.isEmpty)
-                const Text('No pending requests', style: TextStyle(color: C.muted)),
-              ..._pendingRequests.map((req) {
-                final name = req['display_name'] as String? ?? 'Unknown';
-                final userId = req['user_id'] as String;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: C.circlesLt, shape: BoxShape.circle),
-                        child: const Center(child: Text('👤', style: TextStyle(fontSize: 18))),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(name, style: const TextStyle(color: C.text, fontWeight: FontWeight.w500))),
-                      TextButton(
-                        onPressed: () async {
-                          await context.read<CirclesProvider>().approveRequest(widget.circleId, userId, name);
-                          await _load();
-                          setModal(() {});
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        },
-                        child: const Text('Approve', style: TextStyle(color: C.circles)),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18, color: C.danger),
-                        onPressed: () async {
-                          await context.read<CirclesProvider>().declineRequest(widget.circleId, userId);
-                          await _load();
-                          setModal(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(backgroundColor: C.bg, body: Center(child: CircularProgressIndicator(color: C.circles)));
@@ -183,21 +148,22 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
         ]),
         leading: IconButton(icon: const Icon(Icons.arrow_back), color: C.text, onPressed: () => context.pop()),
         actions: [
-          if (_isOwner && _pendingRequests.isNotEmpty)
-            Stack(
-              children: [
-                IconButton(icon: const Icon(Icons.group_add_outlined, color: C.circles), onPressed: _showPendingModal),
-                Positioned(
-                  right: 8, top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(color: C.danger, shape: BoxShape.circle),
-                    child: Text('${_pendingRequests.length}', style: const TextStyle(color: C.white, fontSize: 9, fontWeight: FontWeight.w700)),
-                  ),
+          IconButton(icon: const Icon(Icons.person_add_outlined, color: C.circles), onPressed: _showInviteModal),
+          if (_isOwner)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: C.muted),
+              onSelected: (value) { if (value == 'delete') _confirmDelete(); },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [
+                    Icon(Icons.delete_outline, color: C.danger, size: 20),
+                    SizedBox(width: 12),
+                    Text('Delete Circle', style: TextStyle(color: C.danger)),
+                  ]),
                 ),
               ],
             ),
-          IconButton(icon: const Icon(Icons.person_add_outlined, color: C.circles), onPressed: _showInviteModal),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -390,12 +356,12 @@ class _ShareCardState extends State<_ShareCard> {
                         controller: _commentCtrl,
                         decoration: InputDecoration(
                           hintText: 'Add a comment…',
-                          hintStyle: const TextStyle(color: C.light, fontSize: 13),
+                          hintStyle: const TextStyle(fontSize: 13),
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          filled: true, fillColor: C.bg,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: C.border)),
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: C.border)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: C.circles)),
                         ),
                       ),
                     ),

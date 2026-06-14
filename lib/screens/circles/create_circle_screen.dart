@@ -16,24 +16,15 @@ class CreateCircleScreen extends StatefulWidget {
 
 class _CreateCircleScreenState extends State<CreateCircleScreen> {
   final _nameCtrl = TextEditingController();
-  final _memberCtrl = TextEditingController();
   String _emoji = '🌿';
-  final List<String> _members = [];
   bool _creating = false;
-
-  void _addMember() {
-    final name = _memberCtrl.text.trim();
-    if (name.isEmpty || _members.contains(name)) return;
-    setState(() => _members.add(name));
-    _memberCtrl.clear();
-  }
 
   Future<void> _create() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
     setState(() => _creating = true);
     final provider = context.read<CirclesProvider>();
-    final id = await provider.createCircle(name, _emoji, List.from(_members));
+    final id = await provider.createCircle(name, _emoji);
     if (mounted) {
       context.pop();
       context.push('/circles/$id');
@@ -90,41 +81,8 @@ class _CreateCircleScreenState extends State<CreateCircleScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 28),
-            const Text('Add members', style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),
-            const Text('Add by display name (they can also join via invite link)', style: TextStyle(color: C.muted, fontSize: 13)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _memberCtrl,
-                    decoration: _inputDecoration('Display name'),
-                    onSubmitted: (_) => _addMember(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  style: IconButton.styleFrom(backgroundColor: C.circles),
-                  icon: const Icon(Icons.add, color: C.white),
-                  onPressed: _addMember,
-                ),
-              ],
-            ),
-            if (_members.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _members.map((m) => Chip(
-                  label: Text(m),
-                  deleteIcon: const Icon(Icons.close, size: 16),
-                  onDeleted: () => setState(() => _members.remove(m)),
-                  backgroundColor: C.circlesLt,
-                  side: const BorderSide(color: C.circles),
-                )).toList(),
-              ),
-            ],
+            const SizedBox(height: 12),
+            const Text('Share the invite link after creating to add members.', style: TextStyle(color: C.muted, fontSize: 13)),
           ],
         ),
       ),
@@ -133,11 +91,10 @@ class _CreateCircleScreenState extends State<CreateCircleScreen> {
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
         hintText: hint,
-        filled: true,
-        fillColor: C.surface,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: C.circles)),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: C.circles),
+        ),
       );
 }
 

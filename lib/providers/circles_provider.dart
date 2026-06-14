@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../db/database.dart';
+import '../services/circles_api_service.dart';
+import '../services/notification_service.dart';
 
 const _uuid = Uuid();
 
@@ -62,10 +64,20 @@ class CirclesProvider extends ChangeNotifier {
 
   Future<void> reload() => _loadCircles();
 
-  Future<String> createCircle(String name, String emoji, List<String> memberNames) async {
+  Future<String> createCircle(String name, String emoji) async {
     final id = _uuid.v4();
     final token = _randomToken();
     final now = DateTime.now().millisecondsSinceEpoch;
+
+    // Server first — throws on failure so we don't create an orphaned local record
+    await CirclesApiService.createCircle(
+      id: id,
+      ownerId: _profile!.userId,
+      name: name,
+      emoji: emoji,
+      inviteToken: token,
+    );
+
     await AppDatabase.insertCircle({
       'id': id,
       'name': name,
@@ -74,7 +86,6 @@ class CirclesProvider extends ChangeNotifier {
       'invite_token': token,
       'created_at': now,
     });
-    // Add owner
     await AppDatabase.insertMember({
       'circle_id': id,
       'user_id': _profile!.userId,
@@ -82,27 +93,75 @@ class CirclesProvider extends ChangeNotifier {
       'avatar': _profile!.avatar,
       'joined_at': now,
     });
-    // Add other members by display name
-    for (final name in memberNames) {
-      await AppDatabase.insertMember({
-        'circle_id': id,
-        'user_id': _uuid.v4(),
-        'display_name': name,
-        'avatar': _avatars[0],
-        'joined_at': now,
-      });
-    }
     await _loadCircles();
     return id;
   }
 
   Future<Map<String, dynamic>?> getCircle(String id) => AppDatabase.getCircle(id);
-  Future<Map<String, dynamic>?> getCircleByToken(String token) => AppDatabase.getCircleByToken(token);
 
-  Future<List<Map<String, dynamic>>> getShares(String circleId) => AppDatabase.getShares(circleId);
+  // Resolves via the API — source of truth for cross-device invite validation
+  Future<Map<String, dynamic>?> getCircleByToken(String token) =>
+      CirclesApiService.getCircleByToken(token);
+
+  // Fetches from API, caches to local SQLite, fires notification for new shares from others
+  Future<List<Map<String, dynamic>>> getShares(String circleId) async {
+    try {
+      final apiShares = await CirclesApiService.getShares(circleId);
+      final circle = await AppDatabase.getCircle(circleId);
+      final circleName = circle?['name'] as String? ?? 'your circle';
+
+      for (final share in apiShares) {
+        final isNew = await AppDatabase.getShareById(share['id'] as String) == null;
+        await AppDatabase.insertShare({
+          'id': share['id'] as String,
+          'circle_id': share['circle_id'] as String,
+          'sharer_id': share['sharer_id'] as String,
+          'type': share['type'] as String,
+          'payload': share['payload'] as String,
+          'note': share['note'] as String? ?? '',
+          'timestamp': int.parse(share['timestamp'].toString()),
+        });
+        if (isNew && share['sharer_id'] != _profile?.userId) {
+          final sharerName = share['display_name'] as String? ?? 'Someone';
+          await NotificationService.showShareNotification(sharerName, circleName);
+        }
+      }
+      return apiShares.map((s) => {
+        ...s,
+        'timestamp': int.parse(s['timestamp'].toString()),
+      }).toList();
+    } catch (_) {
+      return AppDatabase.getShares(circleId);
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getMembers(String circleId) => AppDatabase.getMembers(circleId);
   Future<List<Map<String, dynamic>>> getComments(String shareId) => AppDatabase.getComments(shareId);
-  Future<List<Map<String, dynamic>>> getReactions(String shareId) => AppDatabase.getReactions(shareId);
+
+  Future<List<Map<String, dynamic>>> getReactions(String shareId) async {
+    try {
+      final share = await AppDatabase.getShareById(shareId);
+      if (share == null) return AppDatabase.getReactions(shareId);
+      final circleId = share['circle_id'] as String;
+      final apiReactions = await CirclesApiService.getReactions(shareId, circleId);
+      final isMyShare = share['sharer_id'] == _profile?.userId;
+      for (final r in apiReactions) {
+        final isNew = await AppDatabase.insertReactionIfNew({
+          'share_id': r['share_id'] as String,
+          'user_id':  r['user_id']  as String,
+          'type':     r['type']     as String,
+        });
+        if (isNew && isMyShare && r['user_id'] != _profile?.userId) {
+          final circle = await AppDatabase.getCircle(circleId);
+          final circleName = circle?['name'] as String? ?? 'your circle';
+          await NotificationService.showReactionNotification(circleName);
+        }
+      }
+      return apiReactions;
+    } catch (_) {
+      return AppDatabase.getReactions(shareId);
+    }
+  }
 
   Future<void> addShare({
     required String circleId,
@@ -110,19 +169,44 @@ class CirclesProvider extends ChangeNotifier {
     required Map<String, dynamic> payload,
     required String note,
   }) async {
+    final payloadStr = jsonEncode(payload);
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final shareId = await CirclesApiService.createShare(
+      circleId: circleId,
+      sharerId: _profile!.userId,
+      displayName: _profile!.displayName,
+      type: type,
+      payload: payloadStr,
+      note: note,
+      timestamp: timestamp,
+    );
+    // Cache locally using the server-assigned id
     await AppDatabase.insertShare({
-      'id': _uuid.v4(),
+      'id': shareId ?? _uuid.v4(),
       'circle_id': circleId,
       'sharer_id': _profile!.userId,
       'type': type,
-      'payload': jsonEncode(payload),
+      'payload': payloadStr,
       'note': note,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'timestamp': timestamp,
     });
   }
 
-  Future<void> toggleReaction(String shareId, String type) =>
-      AppDatabase.toggleReaction(shareId, _profile!.userId, type);
+  Future<void> toggleReaction(String shareId, String type) async {
+    // Optimistic local toggle + async API call
+    await AppDatabase.toggleReaction(shareId, _profile!.userId, type);
+    // Find which circle this share belongs to for the API path
+    final share = await AppDatabase.getShareById(shareId);
+    if (share != null) {
+      final circleId = share['circle_id'] as String;
+      CirclesApiService.toggleReaction(
+        circleId: circleId,
+        shareId: shareId,
+        userId: _profile!.userId,
+        type: type,
+      );
+    }
+  }
 
   Future<void> addComment(String shareId, String text) async {
     await AppDatabase.insertComment({
@@ -141,23 +225,58 @@ class CirclesProvider extends ChangeNotifier {
     return 'cannaguide://app/circles/join?id=$circleId&token=$token';
   }
 
-  Future<JoinResult> requestToJoin(String circleId, String token) async {
-    if (_profile == null || !hasProfile) return JoinResult.needsProfile;
-    final circle = await AppDatabase.getCircle(circleId);
-    if (circle == null) return JoinResult.invalidToken;
-    if (circle['invite_token'] != token) return JoinResult.invalidToken;
+  Future<JoinResult> requestToJoin(String circleId, String token, String displayName) async {
+    if (_profile == null) return JoinResult.needsProfile;
     if (await AppDatabase.isMember(circleId, _profile!.userId)) return JoinResult.alreadyMember;
-    if (await AppDatabase.hasPendingRequest(circleId, _profile!.userId)) return JoinResult.pending;
-    await AppDatabase.insertPendingRequest({
-      'circle_id': circleId,
-      'user_id': _profile!.userId,
-      'display_name': _profile!.displayName,
-      'requested_at': DateTime.now().millisecondsSinceEpoch,
+    try {
+      final result = await CirclesApiService.createJoinRequest(
+        circleId: circleId,
+        deviceId: _profile!.userId,
+        displayName: displayName,
+      );
+      if (result == 'not_found') return JoinResult.invalidToken;
+      return JoinResult.requested;
+    } catch (_) {
+      return JoinResult.networkError;
+    }
+  }
+
+  Future<void> deleteCircle(String circleId) async {
+    await CirclesApiService.deleteCircle(
+      circleId: circleId,
+      ownerDeviceId: _profile!.userId,
+    );
+    await AppDatabase.deleteCircleAndRelated(circleId);
+    await _loadCircles();
+  }
+
+  // Called after a successful join to persist the circle locally so it shows in the list
+  Future<void> saveJoinedCircle(Map<String, dynamic> circle, String displayName) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await AppDatabase.insertCircle({
+      'id': circle['id'] as String,
+      'name': circle['name'] as String,
+      'emoji': circle['emoji'] as String? ?? '🌿',
+      'owner_id': circle['owner_id'] as String,
+      'invite_token': circle['invite_token'] as String,
+      'created_at': now,
     });
-    return JoinResult.requested;
+    await AppDatabase.insertMember({
+      'circle_id': circle['id'] as String,
+      'user_id': _profile!.userId,
+      'display_name': displayName,
+      'avatar': _profile!.avatar,
+      'joined_at': now,
+    });
+    await _loadCircles();
   }
 
   Future<void> approveRequest(String circleId, String userId, String displayName) async {
+    await CirclesApiService.approveRequest(
+      circleId: circleId,
+      deviceId: userId,
+      ownerDeviceId: _profile!.userId,
+    );
     await AppDatabase.insertMember({
       'circle_id': circleId,
       'user_id': userId,
@@ -168,11 +287,21 @@ class CirclesProvider extends ChangeNotifier {
     await AppDatabase.deletePendingRequest(circleId, userId);
   }
 
-  Future<void> declineRequest(String circleId, String userId) =>
-      AppDatabase.deletePendingRequest(circleId, userId);
+  Future<void> declineRequest(String circleId, String userId) async {
+    await CirclesApiService.declineRequest(
+      circleId: circleId,
+      deviceId: userId,
+      ownerDeviceId: _profile!.userId,
+    );
+    await AppDatabase.deletePendingRequest(circleId, userId);
+  }
 
+  // Pending requests now come from the server
   Future<List<Map<String, dynamic>>> getPendingRequests(String circleId) =>
-      AppDatabase.getPendingRequests(circleId);
+      CirclesApiService.getPendingRequests(
+        circleId: circleId,
+        ownerDeviceId: _profile?.userId ?? '',
+      );
 
   static String _randomToken() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -182,4 +311,4 @@ class CirclesProvider extends ChangeNotifier {
   }
 }
 
-enum JoinResult { requested, alreadyMember, pending, invalidToken, needsProfile }
+enum JoinResult { requested, alreadyMember, pending, invalidToken, needsProfile, networkError }
