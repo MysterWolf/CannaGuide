@@ -243,6 +243,15 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ## Changelog
 
+### v1.7.0 — Dispensary hero logo (2026-06-16)
+- `_RichProfileScreenState`: added `String? _logoUrl` state; `_fetchOperatorProfile()` calls `GET /operators/:id/profile` on init when `stashpassOperatorId` is set, extracts `logo_url`, validates it's a reachable http/https URL before storing
+- `_isValidUrl()` helper guards against null, empty, or non-HTTP URLs
+- `_HeroBg` converted from pure gradient `Container` to a `Stack`; accepts optional `logoUrl`; renders `_LogoCircle` at `Positioned(top: kToolbarHeight + 16, left: 32)` when URL is present and non-empty
+- `_LogoCircle` converted to `StatefulWidget`; tracks `_failed` bool; on `Image.network` `errorBuilder`, schedules `setState(() => _failed = true)` via `addPostFrameCallback` so the entire container+border disappears (not just the inner image) when the URL fails to load
+- `SliverAppBar`: `expandedHeight` 120 → 160px; `centerTitle: false` added; `SliverAppBar.title` removed (was causing name duplication at some scroll positions)
+- `FlexibleSpaceBar.title` replaces `SliverAppBar.title` — Flutter-native mechanism that renders the name in the flex area when expanded and animates it to the toolbar title position on collapse; eliminates duplicate-name race condition
+- `FlexibleSpaceBar`: `expandedTitleScale: 1.0` (no text scaling); `titlePadding: EdgeInsetsDirectional.only(start: 32/16, bottom: 54)` — `start: 32` aligns name under the logo for SP operators; `bottom: 54` clears the TabBar coordinate space and places text between logo and tabs
+
 ### v1.6.0 — Hero stripped to name only (2026-06-15)
 - Hero shows store name only (via SliverAppBar title) against brand color gradient; no pills, badges, or status chips
 - `_HeroBg` reduced to pure gradient `Container`; removed `name`, `venueLabel`, `profile` params

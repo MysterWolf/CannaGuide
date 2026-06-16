@@ -341,12 +341,14 @@ class _RichProfileScreenState extends State<_RichProfileScreen> {
   List<_OperatorLocation> _locations = [];
   bool _locationsLoading = false;
   bool _isEditor = false;
+  String? _logoUrl;
 
   @override
   void initState() {
     super.initState();
     _fetchLocations();
     _checkEditor();
+    _fetchOperatorProfile();
   }
 
   @override
@@ -384,6 +386,34 @@ class _RichProfileScreenState extends State<_RichProfileScreen> {
     }
   }
 
+  Future<void> _fetchOperatorProfile() async {
+    final opId = widget.dispensary.stashpassOperatorId;
+    if (opId == null || opId.isEmpty) return;
+    try {
+      final res = await http.get(Uri.parse('$kCirclesApiBase/operators/$opId/profile'));
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final profile = data['profile'] as Map<String, dynamic>?;
+        final logoUrl = profile?['logo_url'] as String?;
+        if (_isValidUrl(logoUrl) && mounted) {
+          setState(() => _logoUrl = logoUrl);
+        }
+      }
+    } catch (_) {
+      // Logo is optional — ignore network errors
+    }
+  }
+
+  bool _isValidUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    try {
+      final uri = Uri.parse(url);
+      return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _showAddLocationSheet() async {
     final opId = widget.dispensary.stashpassOperatorId;
     if (opId == null || opId.isEmpty) return;
@@ -418,7 +448,8 @@ class _RichProfileScreenState extends State<_RichProfileScreen> {
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
               pinned: true,
-              expandedHeight: 120,
+              centerTitle: false,
+              expandedHeight: 160,
               forceElevated: innerBoxIsScrolled,
               backgroundColor: heroBot,
               leading: IconButton(
@@ -439,12 +470,23 @@ class _RichProfileScreenState extends State<_RichProfileScreen> {
                   }).toString()),
                 ),
               ],
-              title: Text(d.name, style: const TextStyle(color: C.white, fontWeight: FontWeight.w700)),
               flexibleSpace: FlexibleSpaceBar(
                 collapseMode: CollapseMode.pin,
+                expandedTitleScale: 1.0,
+                titlePadding: EdgeInsetsDirectional.only(
+                  start: (widget.dispensary.stashpassOperatorId?.isNotEmpty ?? false) ? 32.0 : 16.0,
+                  bottom: 54.0,
+                ),
+                title: Text(
+                  d.name,
+                  style: const TextStyle(color: C.white, fontWeight: FontWeight.w700, fontSize: 15),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 background: _HeroBg(
                   topColor: heroTop,
                   botColor: heroBot,
+                  logoUrl: _logoUrl,
                 ),
               ),
               bottom: TabBar(
@@ -1242,19 +1284,71 @@ class _EmptyTabState extends StatelessWidget {
 class _HeroBg extends StatelessWidget {
   final Color topColor;
   final Color botColor;
+  final String? logoUrl;
 
-  const _HeroBg({required this.topColor, required this.botColor});
+  const _HeroBg({required this.topColor, required this.botColor, this.logoUrl});
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [topColor, botColor],
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [topColor, botColor],
+          ),
+        ),
       ),
-    ),
+      if (logoUrl != null && logoUrl!.isNotEmpty)
+        Positioned(
+          top: kToolbarHeight + 16.0,
+          left: 32.0,
+          child: _LogoCircle(url: logoUrl!),
+        ),
+    ],
   );
+}
+
+class _LogoCircle extends StatefulWidget {
+  final String url;
+  const _LogoCircle({required this.url});
+
+  @override
+  State<_LogoCircle> createState() => _LogoCircleState();
+}
+
+class _LogoCircleState extends State<_LogoCircle> {
+  bool _failed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) return const SizedBox.shrink();
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(46),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withAlpha(89), width: 1.5),
+      ),
+      child: ClipOval(
+        child: Image.network(
+          widget.url,
+          width: 56,
+          height: 56,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _failed = true);
+            });
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Section label ────────────────────────────────────────────────────────────
