@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../screens/mws_splash_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/discover/discover_screen.dart';
 import '../screens/discover/strain_detail_screen.dart';
@@ -13,6 +14,7 @@ import '../screens/circles/join_circle_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/dispensary/add_dispensary_screen.dart';
+import '../screens/dispensary/add_edit_profile_screen.dart';
 import '../screens/strain/add_strain_screen.dart';
 import '../screens/session/log_session_screen.dart';
 
@@ -25,8 +27,13 @@ final _settingsKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
   navigatorKey: _rootKey,
-  initialLocation: '/home',
+  initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const MwsSplashScreen(),
+    ),
+
     // ── Global modal routes (float above all tabs) ──────────────────────────
     GoRoute(
       path: '/circles/join',
@@ -53,6 +60,7 @@ final appRouter = GoRouter(
             preloadType: state.uri.queryParameters['type'],
             preloadName: state.uri.queryParameters['name'],
             preloadSub: state.uri.queryParameters['sub'],
+            preloadDispensaryId: state.uri.queryParameters['dispensaryId'],
           ),
         ),
       ],
@@ -64,6 +72,7 @@ final appRouter = GoRouter(
         preloadType: state.uri.queryParameters['type'],
         preloadName: state.uri.queryParameters['name'],
         preloadSub: state.uri.queryParameters['sub'],
+        preloadDispensaryId: state.uri.queryParameters['dispensaryId'],
       ),
     ),
     GoRoute(
@@ -103,6 +112,12 @@ final appRouter = GoRouter(
                 GoRoute(
                   path: 'strain/:id',
                   builder: (context, state) => StrainDetailScreen(strainId: state.pathParameters['id']!),
+                  routes: [
+                    GoRoute(
+                      path: 'edit',
+                      builder: (context, state) => AddStrainScreen(strainId: state.pathParameters['id']),
+                    ),
+                  ],
                 ),
                 GoRoute(
                   path: 'dispensary/:id',
@@ -111,6 +126,10 @@ final appRouter = GoRouter(
                     GoRoute(
                       path: 'edit',
                       builder: (context, state) => AddDispensaryScreen(dispensaryId: state.pathParameters['id']),
+                    ),
+                    GoRoute(
+                      path: 'profile/edit',
+                      builder: (context, state) => AddEditProfileScreen(dispensaryId: state.pathParameters['id']!),
                     ),
                   ],
                 ),

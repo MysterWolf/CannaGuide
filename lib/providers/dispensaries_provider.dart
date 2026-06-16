@@ -26,4 +26,9 @@ class DispensariesProvider extends ChangeNotifier {
     await AppDatabase.updateDispensary(d);
     await load();
   }
+
+  Future<void> delete(String id) async {
+    await AppDatabase.deleteDispensary(id);
+    await load();
+  }
 }

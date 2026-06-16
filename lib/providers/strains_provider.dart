@@ -21,4 +21,9 @@ class StrainsProvider extends ChangeNotifier {
     await AppDatabase.insertStrain(s);
     await load();
   }
+
+  Future<void> update(Strain s) async {
+    await AppDatabase.updateStrain(s);
+    await load();
+  }
 }

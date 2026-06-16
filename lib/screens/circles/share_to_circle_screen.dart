@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../db/database.dart';
+import '../../db/models/dispensary.dart';
+import '../../db/models/dispensary_profile.dart';
 import '../../providers/circles_provider.dart';
+import '../../providers/dispensary_profiles_provider.dart';
 import '../../theme/colors.dart';
 
 class ShareToCircleScreen extends StatefulWidget {
@@ -11,6 +15,8 @@ class ShareToCircleScreen extends StatefulWidget {
   final String? preloadType;
   final String? preloadName;
   final String? preloadSub;
+  /// When set and type=='dispensary', snapshot+profile are bundled into the payload.
+  final String? preloadDispensaryId;
 
   const ShareToCircleScreen({
     super.key,
@@ -18,6 +24,7 @@ class ShareToCircleScreen extends StatefulWidget {
     this.preloadType,
     this.preloadName,
     this.preloadSub,
+    this.preloadDispensaryId,
   });
 
   @override
@@ -32,6 +39,9 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
   final _noteCtrl = TextEditingController();
   bool _sharing = false;
 
+  Dispensary? _dispensarySnapshot;
+  DispensaryProfile? _dispensaryProfile;
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +52,16 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
     if (widget.circleId == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.read<CirclesProvider>().reload();
+      });
+    }
+    if (widget.preloadDispensaryId != null && _type == 'dispensary') {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final d = await AppDatabase.getDispensary(widget.preloadDispensaryId!);
+        final p = await context.read<DispensaryProfilesProvider>().load(widget.preloadDispensaryId!);
+        if (mounted) setState(() {
+          _dispensarySnapshot = d;
+          _dispensaryProfile = p;
+        });
       });
     }
   }
@@ -59,10 +79,34 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
     final targetId = _selectedCircleId;
     if (name.isEmpty || targetId == null) return;
     setState(() => _sharing = true);
+
+    final Map<String, dynamic> payload = {
+      'name': name,
+      'sub': _subCtrl.text.trim(),
+    };
+
+    if (_type == 'dispensary' && _dispensarySnapshot != null) {
+      final d = _dispensarySnapshot!;
+      payload['snapshot'] = {
+        'id': d.id,
+        'name': d.name,
+        'city': d.city,
+        'state': d.state,
+        'venue_type': d.venueType,
+        'price_tier': d.priceTier,
+        'staff_rating': d.staffRating,
+        'vibe_rating': d.vibeRating,
+        'notes': d.notes,
+      };
+      if (_dispensaryProfile != null) {
+        payload['profile'] = _dispensaryProfile!.toSharePayload();
+      }
+    }
+
     await context.read<CirclesProvider>().addShare(
           circleId: targetId,
           type: _type,
-          payload: {'name': name, 'sub': _subCtrl.text.trim()},
+          payload: payload,
           note: _noteCtrl.text.trim(),
         );
     if (mounted) context.pop();
@@ -98,29 +142,15 @@ class _ShareToCircleScreenState extends State<ShareToCircleScreen> {
                   if (!circles.hasProfile) {
                     return Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: C.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: C.border),
-                      ),
-                      child: const Text(
-                        'Set up your profile in the Circles tab first.',
-                        style: TextStyle(color: C.muted),
-                      ),
+                      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.border)),
+                      child: const Text('Set up your profile in the Circles tab first.', style: TextStyle(color: C.muted)),
                     );
                   }
                   if (circles.circles.isEmpty) {
                     return Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: C.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: C.border),
-                      ),
-                      child: const Text(
-                        'You\'re not in any circles yet. Create or join one first.',
-                        style: TextStyle(color: C.muted),
-                      ),
+                      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.border)),
+                      child: const Text("You're not in any circles yet. Create or join one first.", style: TextStyle(color: C.muted)),
                     );
                   }
                   return Column(

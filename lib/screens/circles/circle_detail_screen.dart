@@ -5,9 +5,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../db/models/dispensary.dart';
+import '../../db/models/dispensary_profile.dart';
 import '../../providers/circles_provider.dart';
+import '../../providers/dispensaries_provider.dart';
+import '../../providers/dispensary_profiles_provider.dart';
 import '../../theme/colors.dart';
+
+const _circleUuid = Uuid();
 
 class CircleDetailScreen extends StatefulWidget {
   final String circleId;
@@ -61,8 +68,16 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await context.read<CirclesProvider>().deleteCircle(widget.circleId);
-              if (mounted) context.go('/circles');
+              try {
+                await context.read<CirclesProvider>().deleteCircle(widget.circleId);
+                if (mounted) context.go('/circles');
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Could not delete: $e'), backgroundColor: C.danger),
+                  );
+                }
+              }
             },
             child: const Text('Delete', style: TextStyle(color: C.danger, fontWeight: FontWeight.w600)),
           ),
@@ -284,19 +299,21 @@ class _ShareCardState extends State<_ShareCard> {
                   ),
                 ]),
               ),
-              // Payload mini-card
+              // Payload card
               if (payload.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.border)),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      if (payload['name'] != null) Text(payload['name'] as String, style: const TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14)),
-                      if (payload['sub'] != null) Text(payload['sub'] as String, style: const TextStyle(color: C.muted, fontSize: 12)),
-                    ]),
-                  ),
+                  child: type == 'dispensary' && payload.containsKey('snapshot')
+                      ? _DispensaryPayloadCard(payload: payload)
+                      : Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.border)),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            if (payload['name'] != null) Text(payload['name'] as String, style: const TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14)),
+                            if (payload['sub'] != null) Text(payload['sub'] as String, style: const TextStyle(color: C.muted, fontSize: 12)),
+                          ]),
+                        ),
                 ),
               ],
               // Note
@@ -390,6 +407,169 @@ class _ShareCardState extends State<_ShareCard> {
           ),
         );
       },
+    );
+  }
+}
+
+class _DispensaryPayloadCard extends StatefulWidget {
+  final Map<String, dynamic> payload;
+  const _DispensaryPayloadCard({required this.payload});
+
+  @override
+  State<_DispensaryPayloadCard> createState() => _DispensaryPayloadCardState();
+}
+
+class _DispensaryPayloadCardState extends State<_DispensaryPayloadCard> {
+  bool _adding = false;
+  bool _added = false;
+
+  Future<void> _addToMyDispensaries() async {
+    setState(() => _adding = true);
+    final snap = widget.payload['snapshot'] as Map<String, dynamic>;
+    final profData = widget.payload['profile'] as Map<String, dynamic>?;
+    final dispId = snap['id'] as String? ?? _circleUuid.v4();
+
+    final disp = Dispensary(
+      id: dispId,
+      name: snap['name'] as String? ?? 'Unknown',
+      city: snap['city'] as String?,
+      state: snap['state'] as String?,
+      venueType: snap['venue_type'] as String?,
+      priceTier: snap['price_tier'] as String?,
+      staffRating: snap['staff_rating'] as int?,
+      vibeRating: snap['vibe_rating'] as int?,
+      notes: snap['notes'] as String?,
+      wouldGoBack: 1,
+    );
+    await context.read<DispensariesProvider>().add(disp);
+
+    if (profData != null) {
+      final profile = DispensaryProfile.fromSharePayload(_circleUuid.v4(), dispId, profData);
+      await context.read<DispensaryProfilesProvider>().save(profile);
+    }
+
+    if (mounted) {
+      setState(() { _adding = false; _added = true; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${disp.name} added to your dispensaries'), duration: const Duration(seconds: 2)),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final snap = widget.payload['snapshot'] as Map<String, dynamic>;
+    final profData = widget.payload['profile'] as Map<String, dynamic>?;
+
+    // Parse badges from profile data
+    final badges = <String>[];
+    if (profData != null) {
+      if ((profData['black_owned'] as int?) == 1) badges.add('Black-Owned');
+      if ((profData['woman_owned'] as int?) == 1) badges.add('Woman-Owned');
+      if ((profData['lgbtq_friendly'] as int?) == 1) badges.add('LGBTQ+ Friendly');
+      if ((profData['veteran_owned'] as int?) == 1) badges.add('Veteran-Owned');
+    }
+
+    // About snippet
+    final about = profData?['about'] as String?;
+    final aboutSnippet = about != null && about.length > 120 ? '${about.substring(0, 120)}…' : about;
+
+    // Current specials
+    List<Map<String, dynamic>> specials = [];
+    final specialsStr = profData?['specials'] as String?;
+    if (specialsStr != null && specialsStr.isNotEmpty) {
+      try {
+        final all = List<Map<String, dynamic>>.from(jsonDecode(specialsStr));
+        final cutoff = DateTime.now().subtract(const Duration(days: 7)).millisecondsSinceEpoch;
+        specials = all.where((s) {
+          final t = s['updated_at'] as int?;
+          return t == null || t >= cutoff;
+        }).toList();
+      } catch (_) {}
+    }
+
+    final name = snap['name'] as String? ?? widget.payload['name'] as String? ?? '';
+    final location = [snap['city'] as String?, snap['state'] as String?]
+        .where((v) => v != null && v.isNotEmpty)
+        .join(', ');
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: C.bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: C.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.storefront_outlined, size: 18, color: C.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: const TextStyle(color: C.text, fontWeight: FontWeight.w700, fontSize: 14)),
+                    if (location.isNotEmpty)
+                      Text(location, style: const TextStyle(color: C.muted, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (badges.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 5,
+              runSpacing: 4,
+              children: badges.map((b) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: C.goldLight,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: C.gold),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.star, size: 10, color: C.gold),
+                      const SizedBox(width: 3),
+                      Text(b, style: const TextStyle(color: C.amber, fontSize: 11, fontWeight: FontWeight.w600)),
+                    ]),
+                  )).toList(),
+            ),
+          ],
+          if (aboutSnippet != null && aboutSnippet.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(aboutSnippet, style: const TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
+          ],
+          if (specials.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.local_offer_outlined, size: 13, color: C.accent),
+                const SizedBox(width: 4),
+                Text('${specials.length} special${specials.length == 1 ? '' : 's'} this week',
+                    style: const TextStyle(color: C.accent, fontSize: 12, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ],
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              icon: Icon(_added ? Icons.check : Icons.add_location_alt_outlined, size: 16),
+              label: Text(_added ? 'Added' : 'Add to my dispensaries'),
+              onPressed: (_adding || _added) ? null : _addToMyDispensaries,
+              style: FilledButton.styleFrom(
+                backgroundColor: _added ? C.sage : C.accent,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../app.dart';
+import 'package:go_router/go_router.dart';
 
 class MwsSplashScreen extends StatefulWidget {
   const MwsSplashScreen({super.key});
@@ -19,9 +18,7 @@ class _MwsSplashScreenState extends State<MwsSplashScreen> {
   Future<void> _run() async {
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const CannaGuideApp()),
-    );
+    context.go('/home');
   }
 
   @override

@@ -14,7 +14,8 @@ import '../../theme/colors.dart';
 
 const _uuid = Uuid();
 
-const _categories = ['Flower', 'Edible', 'Vape', 'Beverage', 'Tincture', 'Topical', 'Concentrate', 'Shots & Nano'];
+// Canonical list — must match add_strain_screen.dart
+const _categories = ['Flower', 'Pre-Roll', 'Vape', 'Concentrate', 'Edible', 'Tincture', 'Topical', 'Shots & Nano', 'Other'];
 const _timesOfDay = ['Morning', 'Afternoon', 'Evening', 'Night'];
 const _settings = ['Home', 'Social', 'Work', 'Outdoors', 'Medical'];
 const _sourceTypes = ['Dispensary', 'Wellness Retail', 'Smoke Shop', 'Liquor Store', 'General Retail'];
@@ -23,9 +24,10 @@ const _useCaseOptions = ['Social', 'Sleep', 'Focus', 'Relax', 'Energy'];
 const _shotsUseCaseOptions = ['Social', 'Focus', 'Relax', 'Energy'];
 const _shotTypeOptions = ['Standard Shot', 'Nano-Emulsified'];
 const _ratingLabels = ['Poor', 'Low', 'OK', 'Good', 'Great'];
-const _showMgCategories = {'Edible', 'Beverage', 'Tincture', 'Shots & Nano'};
+const _showMgCategories = {'Edible', 'Tincture', 'Shots & Nano'};
 const _methodsByCategory = {
-  'Flower':      ['Joint', 'Pipe', 'Bong', 'Vaporizer', 'Dab Rig'],
+  // Pre-Roll as method = you rolled or used a pre-roll of loose flower
+  'Flower':      ['Joint', 'Pipe', 'Bong', 'Vaporizer', 'Pre-Roll', 'Dab Rig', 'Dab Pen', 'Nectar Collector'],
   'Vape':        ['Cartridge', 'Disposable', 'Pod'],
   'Concentrate': ['Dab Rig', 'Dab Pen', 'Nectar Collector'],
 };
@@ -70,7 +72,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
   bool _doseExpanded     = false;
   bool _beverageExpanded = false;
   bool _effectsExpanded  = false;
-  bool _notesExpanded    = false;
+  bool _notesExpanded    = true;
 
   // ── Section 1: What ───────────────────────────────────────────────────────
   final _strainNameCtrl = TextEditingController();
@@ -356,6 +358,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: C.bg,
         title: const Text('Delete session?'),
         content: const Text('This entry will be permanently removed.'),
         actions: [
@@ -382,11 +385,12 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
     if (dispensaries.isEmpty) return;
     final picked = await showModalBottomSheet<Dispensary>(
       context: context,
+      backgroundColor: C.surface,
       builder: (ctx) => _SimplePickerSheet<Dispensary>(
         title: 'Select Dispensary',
         items: dispensaries,
+        // DISPLAY: always use name, never city
         labelOf: (d) => d.name,
-        subtitleOf: (d) => d.venueType,
         selected: _dispensary,
       ),
     );
@@ -446,9 +450,9 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
               onToggle: () => setState(() => _doseExpanded = !_doseExpanded),
               child: _buildDoseSection(),
             ),
-            if (_category == 'Beverage' || _category == 'Shots & Nano')
+            if (_category == 'Shots & Nano')
               _CollapsibleSection(
-                title: _category == 'Shots & Nano' ? 'Shot Details' : 'Beverage Extras',
+                title: 'Shot Details',
                 summary: _beverageSummary,
                 expanded: _beverageExpanded,
                 onToggle: () => setState(() => _beverageExpanded = !_beverageExpanded),
@@ -562,8 +566,8 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
                 }
                 // Clear product type if switching away from Shots & Nano
                 if (_category != 'Shots & Nano') _productType = null;
-                // Auto-expand extras section for Beverage and Shots & Nano
-                if (_category == 'Beverage' || _category == 'Shots & Nano') _beverageExpanded = true;
+                // Auto-expand extras section for Shots & Nano
+                if (_category == 'Shots & Nano') _beverageExpanded = true;
               }),
               selectedColor: C.accentLight,
               side: BorderSide(color: sel ? C.accent : C.border),
@@ -619,9 +623,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
         _PickerRow(
           icon: Icons.storefront_outlined,
           text: _dispensary != null
-              ? (_dispensary!.venueType != null && _dispensary!.venueType!.isNotEmpty
-                  ? '${_dispensary!.name} · ${_dispensary!.venueType}'
-                  : _dispensary!.name)
+              ? _dispensary!.name
               : 'Pick specific location (optional)',
           set: _dispensary != null,
           onTap: _pickDispensary,
@@ -730,70 +732,22 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
 
   // ── Section 3: Beverage / Shot extras ────────────────────────────────────
 
+  // Only called when _category == 'Shots & Nano'
   Widget _buildBeverageSection() {
-    if (_category == 'Shots & Nano') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _label('Product type'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: _shotTypeOptions.map((t) {
-              final sel = t == _productType;
-              return ChoiceChip(
-                label: Text(t),
-                selected: sel,
-                onSelected: (_) => setState(() => _productType = sel ? null : t),
-                selectedColor: C.accentLight,
-                side: BorderSide(color: sel ? C.accent : C.border),
-                labelStyle: TextStyle(color: sel ? C.accent : C.muted, fontSize: 13),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 20),
-          _label('Use case'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: _shotsUseCaseOptions.map((uc) {
-              final sel = uc == _useCase;
-              return ChoiceChip(
-                label: Text(uc),
-                selected: sel,
-                onSelected: (_) => setState(() => _useCase = sel ? null : uc),
-                selectedColor: C.accentLight,
-                side: BorderSide(color: sel ? C.accent : C.border),
-                labelStyle: TextStyle(color: sel ? C.accent : C.muted, fontSize: 13),
-              );
-            }).toList(),
-          ),
-        ],
-      );
-    }
-
-    // Beverage
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _label('Functional ingredients'),
+        _label('Product type'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8, runSpacing: 8,
-          children: _functionalIngredientOptions.map((ing) {
-            final sel = _functionalIngredients.contains(ing);
-            return FilterChip(
-              label: Text(ing),
+          children: _shotTypeOptions.map((t) {
+            final sel = t == _productType;
+            return ChoiceChip(
+              label: Text(t),
               selected: sel,
-              onSelected: (v) => setState(() {
-                if (v) {
-                  _functionalIngredients.add(ing);
-                } else {
-                  _functionalIngredients.remove(ing);
-                }
-              }),
+              onSelected: (_) => setState(() => _productType = sel ? null : t),
               selectedColor: C.accentLight,
-              checkmarkColor: C.accent,
               side: BorderSide(color: sel ? C.accent : C.border),
               labelStyle: TextStyle(color: sel ? C.accent : C.muted, fontSize: 13),
             );
@@ -804,7 +758,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
         const SizedBox(height: 8),
         Wrap(
           spacing: 8, runSpacing: 8,
-          children: _useCaseOptions.map((uc) {
+          children: _shotsUseCaseOptions.map((uc) {
             final sel = uc == _useCase;
             return ChoiceChip(
               label: Text(uc),

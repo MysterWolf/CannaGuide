@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../db/database.dart';
 import '../../db/models/dispensary.dart';
 import '../../db/models/strain.dart';
 import '../../providers/dispensaries_provider.dart';
@@ -11,30 +12,72 @@ import '../../theme/colors.dart';
 
 const _uuid = Uuid();
 
+// Canonical category list — must match log_session_screen.dart
+const _strainCategories = [
+  'Flower', 'Pre-Roll', 'Vape', 'Concentrate',
+  'Edible', 'Tincture', 'Topical', 'Shots & Nano', 'Other',
+];
 const _strainTypes = ['sativa', 'indica', 'hybrid'];
-const _categories = ['Flower', 'Vape', 'Pre-Roll', 'Concentrate', 'Edible', 'Tincture', 'Topical', 'Shots & Nano', 'Other'];
 
 class AddStrainScreen extends StatefulWidget {
-  const AddStrainScreen({super.key});
+  final String? strainId;
+  const AddStrainScreen({super.key, this.strainId});
+
+  bool get isEditing => strainId != null;
 
   @override
   State<AddStrainScreen> createState() => _AddStrainScreenState();
 }
 
 class _AddStrainScreenState extends State<AddStrainScreen> {
-  final _nameCtrl = TextEditingController();
+  final _nameCtrl  = TextEditingController();
   final _brandCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   String _strainType = 'hybrid';
   String? _category;
   Dispensary? _dispensary;
   bool _saving = false;
+  bool _loading = false;
+  Strain? _existing;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DispensariesProvider>().load();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<DispensariesProvider>().load();
+      if (widget.isEditing) await _loadExisting();
+    });
+  }
+
+  Future<void> _loadExisting() async {
+    setState(() => _loading = true);
+    final strain = await AppDatabase.getStrain(widget.strainId!);
+    if (strain == null || !mounted) {
+      setState(() => _loading = false);
+      return;
+    }
+    _existing = strain;
+    _nameCtrl.text  = strain.name;
+    _brandCtrl.text = strain.brand ?? '';
+    _notesCtrl.text = strain.notes ?? '';
+
+    // Match stored strainType to one of the valid options
+    final type = strain.strainType?.toLowerCase();
+    final validTypes = ['sativa', 'indica', 'hybrid'];
+
+    Dispensary? disp;
+    if (strain.dispensaryId != null) {
+      disp = context.read<DispensariesProvider>().dispensaries
+          .cast<Dispensary?>()
+          .firstWhere((d) => d?.id == strain.dispensaryId, orElse: () => null);
+      disp ??= await AppDatabase.getDispensary(strain.dispensaryId!);
+    }
+
+    setState(() {
+      _strainType = validTypes.contains(type) ? type! : 'hybrid';
+      _category   = _strainCategories.contains(strain.category) ? strain.category : null;
+      _dispensary = disp;
+      _loading    = false;
     });
   }
 
@@ -50,17 +93,31 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
     setState(() => _saving = true);
-    final s = Strain(
-      id: _uuid.v4(),
+
+    final strain = Strain(
+      id: _existing?.id ?? _uuid.v4(),
       name: name,
       brand: _brandCtrl.text.trim().isEmpty ? null : _brandCtrl.text.trim(),
       strainType: _strainType,
-      source: 'manual',
+      source: _existing?.source ?? 'manual',
+      sourceType: _existing?.sourceType,
+      createdAt: _existing?.createdAt,
+      updatedAt: DateTime.now().toIso8601String(),
+      thcPct: _existing?.thcPct,
+      cbdPct: _existing?.cbdPct,
+      terpeneProfile: _existing?.terpeneProfile,
+      cannabinoidProfile: _existing?.cannabinoidProfile,
+      description: _existing?.description,
       category: _category,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       dispensaryId: _dispensary?.id,
     );
-    await context.read<StrainsProvider>().add(s);
+
+    if (widget.isEditing) {
+      await context.read<StrainsProvider>().update(strain);
+    } else {
+      await context.read<StrainsProvider>().add(strain);
+    }
     if (mounted) context.pop();
   }
 
@@ -74,11 +131,11 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
     }
     final picked = await showModalBottomSheet<Dispensary>(
       context: context,
+      backgroundColor: C.surface,
       builder: (ctx) => _PickerSheet<Dispensary>(
         title: 'Source dispensary',
         items: dispensaries,
         labelOf: (d) => d.name,
-        subtitleOf: (d) => d.venueType,
         selected: _dispensary,
       ),
     );
@@ -87,6 +144,13 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: C.bg,
+        body: Center(child: CircularProgressIndicator(color: C.accent)),
+      );
+    }
+
     final typeColor = switch (_strainType) {
       'sativa' => C.sage,
       'indica' => C.danger,
@@ -97,12 +161,18 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
-        title: const Text('Add Strain', style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),
+        title: Text(
+          widget.isEditing ? 'Edit Strain' : 'Add Strain',
+          style: const TextStyle(color: C.text, fontWeight: FontWeight.w600),
+        ),
         leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.pop()),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
-            child: Text('Save', style: TextStyle(color: _saving ? C.muted : C.accent, fontWeight: FontWeight.w700)),
+            child: Text(
+              widget.isEditing ? 'Update' : 'Save',
+              style: TextStyle(color: _saving ? C.muted : C.accent, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -115,7 +185,7 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
             const SizedBox(height: 6),
             TextField(
               controller: _nameCtrl,
-              autofocus: true,
+              autofocus: !widget.isEditing,
               decoration: _dec('e.g. Blue Dream'),
             ),
 
@@ -177,7 +247,7 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _categories.map((c) {
+              children: _strainCategories.map((c) {
                 final sel = c == _category;
                 return ChoiceChip(
                   label: Text(c),
@@ -208,11 +278,7 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _dispensary == null
-                            ? 'Select dispensary'
-                            : (_dispensary!.venueType != null && _dispensary!.venueType!.isNotEmpty
-                                ? '${_dispensary!.name} · ${_dispensary!.venueType}'
-                                : _dispensary!.name),
+                        _dispensary == null ? 'Select dispensary' : _dispensary!.name,
                         style: TextStyle(color: _dispensary != null ? C.text : C.light),
                       ),
                     ),
@@ -251,7 +317,10 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
                 ),
                 child: _saving
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Save Strain', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    : Text(
+                        widget.isEditing ? 'Update Strain' : 'Save Strain',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ],

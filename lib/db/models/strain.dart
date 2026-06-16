@@ -35,6 +35,40 @@ class Strain {
     this.dispensaryId,
   });
 
+  Strain copyWith({
+    String? name,
+    String? brand,
+    String? strainType,
+    double? thcPct,
+    double? cbdPct,
+    String? terpeneProfile,
+    String? description,
+    String? category,
+    String? notes,
+    String? dispensaryId,
+    String? updatedAt,
+    bool clearBrand = false,
+    bool clearNotes = false,
+    bool clearDispensaryId = false,
+  }) => Strain(
+    id: id,
+    name: name ?? this.name,
+    brand: clearBrand ? null : (brand ?? this.brand),
+    strainType: strainType ?? this.strainType,
+    thcPct: thcPct ?? this.thcPct,
+    cbdPct: cbdPct ?? this.cbdPct,
+    terpeneProfile: terpeneProfile ?? this.terpeneProfile,
+    cannabinoidProfile: cannabinoidProfile,
+    description: description ?? this.description,
+    source: source,
+    sourceType: sourceType,
+    createdAt: createdAt,
+    updatedAt: updatedAt ?? DateTime.now().toIso8601String(),
+    category: category ?? this.category,
+    notes: clearNotes ? null : (notes ?? this.notes),
+    dispensaryId: clearDispensaryId ? null : (dispensaryId ?? this.dispensaryId),
+  );
+
   factory Strain.fromMap(Map<String, dynamic> m) => Strain(
         id: m['id'] as String,
         name: m['name'] as String,

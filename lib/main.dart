@@ -5,10 +5,11 @@ import 'package:provider/provider.dart';
 import 'db/database.dart';
 import 'providers/circles_provider.dart';
 import 'providers/dispensaries_provider.dart';
+import 'providers/dispensary_profiles_provider.dart';
 import 'providers/sessions_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/strains_provider.dart';
-import 'screens/mws_splash_screen.dart';
+import 'app.dart';
 import 'services/notification_service.dart';
 
 void main() async {
@@ -30,12 +31,10 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SessionsProvider()),
         ChangeNotifierProvider(create: (_) => StrainsProvider()),
         ChangeNotifierProvider(create: (_) => DispensariesProvider()),
+        ChangeNotifierProvider(create: (_) => DispensaryProfilesProvider()),
         ChangeNotifierProvider(create: (_) => CirclesProvider()),
       ],
-      child: const MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: MwsSplashScreen(),
-      ),
+      child: const CannaGuideApp(),
     ),
   );
 }

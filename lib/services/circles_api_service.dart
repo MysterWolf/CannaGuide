@@ -83,7 +83,7 @@ class CirclesApiService {
     return res.statusCode == 200;
   }
 
-  static Future<bool> deleteCircle({
+  static Future<void> deleteCircle({
     required String circleId,
     required String ownerDeviceId,
   }) async {
@@ -91,7 +91,9 @@ class CirclesApiService {
       Uri.parse('$kCirclesApiBase/circles/$circleId'),
       headers: _headers(deviceId: ownerDeviceId),
     );
-    return res.statusCode == 200;
+    if (res.statusCode != 200) {
+      throw Exception('Server rejected deletion (${res.statusCode})');
+    }
   }
 
   static Future<bool> declineRequest({

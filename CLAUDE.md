@@ -15,7 +15,7 @@ and tracking effects supports that goal; it is not the goal itself. Every featur
 should ask: *does this teach the user something?* Tracker features that don't teach do not
 belong in this app.
 
-**Current version:** 1.0.3+1  
+**Current version:** 1.6.0+1  
 **Package:** `com.mysterwolf.cannaguide`  
 **Repo:** https://github.com/MysterWolf/CannaGuide (branch: master)  
 **APK output:** `build/app/outputs/flutter-apk/app-release.apk`
@@ -242,6 +242,56 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 ---
 
 ## Changelog
+
+### v1.6.0 — Hero stripped to name only (2026-06-15)
+- Hero shows store name only (via SliverAppBar title) against brand color gradient; no pills, badges, or status chips
+- `_HeroBg` reduced to pure gradient `Container`; removed `name`, `venueLabel`, `profile` params
+- Removed `_HeroChip` and `_HeroBadgePill` widgets (unused)
+- `expandedHeight`: 150 → 120px
+
+### v1.5.0 — City removed; venue type as secondary label (2026-06-15)
+- Hero header: city removed entirely; now shows store name + venue type pill + ownership badges + open/closed status chip; `expandedHeight` reduced to 150px
+- Hero open/closed chip: derived from `profile.hoursMap[today]`; green "Open Today" or red "Closed Today" when hours present
+- Discover dispensary cards: city/state sub-label replaced with venue type label; venue type removed from right column
+- No-profile card header: city line removed; venue type already visible in chips
+- Share-to-circle `sub` field: replaced city string with venue type label everywhere
+- Removed `fallbackLocation`, `_primaryCityDisplay` — city no longer needed in any UI layer
+
+### v1.4.0 — Dispensary header + Add Location (2026-06-15)
+- Hero height reduced from 210px → 160px; venue type pill and ownership badges removed from hero (less clutter); store name + city only, compact bottom-pinned layout
+- Hero city sourced from primary StashPass location's city/state (falls back to local dispensary city); updates when API responds
+- `_RichProfileScreenState`: added `_isEditor` bool checked from SharedPreferences key `is_editor` on init
+- Locations tab: when `is_editor = true`, shows "Add Location" OutlinedButton at top of tab
+- `_AddLocationSheet`: modal bottom sheet with fields for name (optional), address, city (required), state, phone; Is Primary + Active toggles (Active defaults true); POST to `/operators/:id/locations` with `x-api-secret` header; reloads tab on success; city falls back as name if name field left empty
+
+### v1.3.0 — Dispensary locations tab (2026-06-15)
+- `DispensaryDetailScreen`: rich profile screen (`_RichProfileScreen`) converted from `StatelessWidget` to `StatefulWidget`; wrapped in `DefaultTabController(length: 4)` + `NestedScrollView` with pinned `SliverAppBar`; 4 tabs: **About**, **Locations**, **Hours**, **Payment**
+- About tab: about text, ordering CTA, specials, links, personal notes/ratings, edit/share/delete — same content as before, split into own `ListView`
+- Locations tab: fetches `GET /operators/:id/locations` from StashPass API when `dispensary.stashpassOperatorId` is set; `_OperatorLocation` model parsed from response; cards show name, address, city/state/zip, phone, Primary badge; tap → opens Google Maps via `url_launcher`; primary location sorted first
+- Hours tab: standalone hours table (was embedded in scrollable content)
+- Payment tab: payment method chips (was embedded in scrollable content)
+- Header (hero): city shown is primary StashPass location city/state instead of operator-level city; falls back to local `d.city`/`d.state` if no operator ID or API unavailable
+- Added `url_launcher: ^6.3.1` to pubspec.yaml; added `<queries>` block to AndroidManifest.xml for `https://` and `geo:` intents (Android 11+ package visibility)
+- Empty states added for each tab when no data (Hours/Payment/Locations)
+
+### v1.2.0 — Strain edit, category consistency, notes prominence (2026-06-15)
+- Strain edit: `AddStrainScreen` accepts optional `strainId`; edit mode loads existing strain, pre-populates all fields, calls `StrainsProvider.update()`. Router adds `/discover/strain/:id/edit` sub-route. StrainDetailScreen has pencil icon in appbar; returns to detail and reloads after edit.
+- Inline notes on StrainDetailScreen: always-visible Notes card with pencil icon; tapping switches to editable TextField with Save/Cancel; saves via `StrainsProvider.update()` + `Strain.copyWith()`.
+- DB: `AppDatabase.updateStrain()` added. `Strain` model gains `copyWith()`.
+- Category consistency: canonical list `[Flower, Pre-Roll, Vape, Concentrate, Edible, Tincture, Topical, Shots & Nano, Other]` used in both `AddStrainScreen` and `LogSessionScreen`. `LogSessionScreen` previously had `Beverage` (removed), was missing `Pre-Roll` and `Other`.
+- Consumption methods: `_methodsByCategory['Flower']` gains `Pre-Roll` as a method (you rolled loose flower); `Dab Pen` and `Nectar Collector` added to Flower methods. Pre-Roll is both a product category AND a consumption method under Flower.
+- `_showMgCategories`: removed `Beverage` (no longer a category). Beverage extras section removed; Shots & Nano extras section kept.
+- Notes visibility: `_notesExpanded` defaults to `true` in LogSessionScreen so Notes field is always visible without needing to expand. Pre-population of notes when editing existing sessions confirmed working (`_notesCtrl.text = session.notes ?? ''` + `_notesExpanded = _notesCtrl.text.isNotEmpty`).
+
+### v1.1.0 — Dispensary profiles system (2026-06-14)
+- DB: bumped to version 5; new `dispensary_profiles` table (UNIQUE on dispensary_id) with 17 columns: about, hours (JSON), website, instagram, leafly_url, dutchie_url, other_ordering_url, ordering_platform, payment_methods (JSON array), black_owned/woman_owned/lgbtq_friendly/veteran_owned (INTEGER flags), specials (JSON array), date_updated
+- Model: `lib/db/models/dispensary_profile.dart` — getters: hoursMap, paymentList, specialsList, currentSpecials (7-day filter), hasOwnershipBadges, hasLinks; fromMap(), fromSharePayload(id, dispensaryId, payload), toMap(), toSharePayload()
+- Provider: `DispensaryProfilesProvider` — Map-based cache keyed by dispensaryId; load(), save(), delete(); registered in MultiProvider
+- Screen: `AddEditProfileScreen` — full form: about, ownership badge chips (Black-Owned/Woman-Owned/LGBTQ+/Veteran-Owned), payment FilterChips (Cash/Debit/Credit/Dutchie/Leafly/CanPay), per-day hours inputs Mon-Sun, specials add/remove dialog, links + ordering fields; saves on appbar "Save" or bottom FilledButton
+- Router: `profile/edit` route added under `/discover/dispensary/:id`; `dispensaryId` query param added to both `/share` and `/circles/:id/share` routes
+- DispensaryDetailScreen: rewritten with profile loading; rich profile section (ownership badges in gold pills, about, payment chips, hours table, this-week's-specials, links); "Add profile info" OutlinedButton when no profile; "Edit" text button in profile section header
+- ShareToCircleScreen: `preloadDispensaryId` param; loads dispensary+profile async in initState; includes `snapshot` (dispensary fields) and `profile` (toSharePayload()) in payload when type==dispensary
+- CircleDetailScreen: rich `_DispensaryPayloadCard` for dispensary shares with snapshot; shows name, location, gold ownership badge pills, about snippet, specials count, "Add to my dispensaries" FilledButton (inserts Dispensary + DispensaryProfile via providers; turns green on success)
 
 ### v1.0.3 — Dispensary ratings + icon (2026-06-13)
 - DB: bumped to version 4; defensive migration adds `staff_rating INTEGER` + `vibe_rating INTEGER` to `dispensaries` (columns pre-existed in RN schema; wrapped in try/catch)

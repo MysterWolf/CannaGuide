@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../db/database.dart';
 import '../../db/models/strain.dart';
+import '../../providers/strains_provider.dart';
 import '../../theme/colors.dart';
 
 class StrainDetailScreen extends StatefulWidget {
@@ -18,10 +20,21 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
   List<Map<String, dynamic>> _sessions = [];
   bool _loading = true;
 
+  // Inline notes edit state
+  bool _editingNotes = false;
+  final _notesCtrl = TextEditingController();
+  bool _savingNotes = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _notesCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -30,10 +43,25 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
     if (mounted) {
       setState(() {
         _strain = strain;
+        _notesCtrl.text = strain?.notes ?? '';
         _sessions = sessions;
         _loading = false;
+        _editingNotes = false;
       });
     }
+  }
+
+  Future<void> _saveNotes() async {
+    final s = _strain;
+    if (s == null) return;
+    setState(() => _savingNotes = true);
+    final updated = s.copyWith(
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      clearNotes: _notesCtrl.text.trim().isEmpty,
+    );
+    await context.read<StrainsProvider>().update(updated);
+    await _load();
+    if (mounted) setState(() => _savingNotes = false);
   }
 
   @override
@@ -85,6 +113,15 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
               onPressed: () => context.pop(),
             ),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                color: C.muted,
+                tooltip: 'Edit strain',
+                onPressed: () async {
+                  await context.push('/discover/strain/${s.id}/edit');
+                  _load();
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.share_outlined),
                 onPressed: () => context.push(
@@ -190,13 +227,6 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
                     Text(s.description!, style: const TextStyle(color: C.muted, fontSize: 14, height: 1.5)),
                   ],
 
-                  if (s.notes != null && s.notes!.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    const Text('Notes', style: TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14)),
-                    const SizedBox(height: 6),
-                    Text(s.notes!, style: const TextStyle(color: C.muted, fontSize: 14, height: 1.5)),
-                  ],
-
                   if (s.terpeneProfile != null && s.terpeneProfile!.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     const Text('Terpene profile', style: TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14)),
@@ -204,7 +234,74 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
                     Text(s.terpeneProfile!, style: const TextStyle(color: C.muted, fontSize: 14, height: 1.5)),
                   ],
 
+                  // ── Notes section (always visible, inline editable) ──────────
+                  const SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: C.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _editingNotes ? C.accent : C.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Notes', style: TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 14)),
+                            const Spacer(),
+                            if (!_editingNotes)
+                              GestureDetector(
+                                onTap: () => setState(() => _editingNotes = true),
+                                child: const Icon(Icons.edit_outlined, size: 18, color: C.muted),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (_editingNotes) ...[
+                          TextField(
+                            controller: _notesCtrl,
+                            maxLines: 4,
+                            autofocus: true,
+                            decoration: const InputDecoration(
+                              hintText: 'Terpene notes, appearance, anything memorable…',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: _savingNotes ? null : () {
+                                  _notesCtrl.text = s.notes ?? '';
+                                  setState(() => _editingNotes = false);
+                                },
+                                child: const Text('Cancel', style: TextStyle(color: C.muted)),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                style: FilledButton.styleFrom(backgroundColor: C.accent),
+                                onPressed: _savingNotes ? null : _saveNotes,
+                                child: _savingNotes
+                                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                    : const Text('Save'),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          if (s.notes != null && s.notes!.isNotEmpty)
+                            Text(s.notes!, style: const TextStyle(color: C.muted, fontSize: 14, height: 1.5))
+                          else
+                            const Text('Tap pencil to add notes…', style: TextStyle(color: C.light, fontSize: 14)),
+                        ],
+                      ],
+                    ),
+                  ),
+
                   const SizedBox(height: 24),
+
                   // Action buttons
                   Row(
                     children: [

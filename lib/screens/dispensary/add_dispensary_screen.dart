@@ -83,6 +83,30 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
     super.dispose();
   }
 
+  Future<void> _delete() async {
+    if (_existing == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete dispensary?'),
+        content: const Text('This will permanently remove the dispensary. Sessions linked to it will keep their other data.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: C.danger)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await context.read<DispensariesProvider>().delete(_existing!.id);
+    if (mounted) context.pop();
+  }
+
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
@@ -245,6 +269,24 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
                       ),
               ),
             ),
+
+            if (widget.isEditing) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _saving ? null : _delete,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: C.danger,
+                    side: const BorderSide(color: C.danger),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Delete Dispensary',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -4,12 +4,13 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'models/dispensary.dart';
+import 'models/dispensary_profile.dart';
 import 'models/session.dart';
 import 'models/strain.dart';
 
 class AppDatabase {
   static const _dbName = 'cannaguide.db';
-  static const _dbVersion = 4;
+  static const _dbVersion = 8;
 
   static Database? _db;
 
@@ -98,6 +99,8 @@ class AppDatabase {
         stashpass_operator_id TEXT,
         notes TEXT
       )''');
+
+    await _seedNJOperators(db);
 
     await db.execute('''
       CREATE TABLE IF NOT EXISTS inventory (
@@ -231,6 +234,33 @@ class AppDatabase {
     await _createCirclesTables(db);
 
     await db.execute('''
+      CREATE TABLE IF NOT EXISTS dispensary_profiles (
+        id TEXT PRIMARY KEY,
+        dispensary_id TEXT NOT NULL UNIQUE,
+        about TEXT,
+        hours TEXT,
+        website TEXT,
+        instagram TEXT,
+        leafly_url TEXT,
+        dutchie_url TEXT,
+        other_ordering_url TEXT,
+        ordering_platform TEXT,
+        payment_methods TEXT,
+        black_owned INTEGER NOT NULL DEFAULT 0,
+        woman_owned INTEGER NOT NULL DEFAULT 0,
+        lgbtq_friendly INTEGER NOT NULL DEFAULT 0,
+        veteran_owned INTEGER NOT NULL DEFAULT 0,
+        specials TEXT,
+        date_updated INTEGER,
+        primary_color TEXT,
+        secondary_color TEXT,
+        background_color TEXT
+      )''');
+
+    await _seedNJProfiles(db);
+    await _seedNJProfileColors(db);
+
+    await db.execute('''
       CREATE VIEW IF NOT EXISTS v_diary AS
         SELECT sess.id, sess.session_at, sess.time_of_day, sess.method,
           sess.dose_notes, str.name AS strain_name, str.brand AS strain_brand,
@@ -244,6 +274,106 @@ class AppDatabase {
         LEFT JOIN strains str ON str.id = sess.strain_id
         LEFT JOIN dispensaries d ON d.id = sess.dispensary_id
         ORDER BY sess.session_at DESC''');
+  }
+
+  // Seed profiles for the three NJ operators — idempotent via OR IGNORE on dispensary_id
+  static Future<void> _seedNJProfiles(Database db) async {
+    const hoursWeekdays9to9 = '{"monday":"9:00 AM – 9:00 PM","tuesday":"9:00 AM – 9:00 PM",'
+        '"wednesday":"9:00 AM – 9:00 PM","thursday":"9:00 AM – 9:00 PM",'
+        '"friday":"9:00 AM – 9:00 PM","saturday":"9:00 AM – 9:00 PM"}';
+
+    final profiles = [
+      {
+        'id': 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e',
+        'dispensary_id': 'd4e8a2f1-7c6b-4d3e-9a5f-1b8e2c7d4f6a',
+        'about': "West Orange's coziest dispensary. A rich, library-inspired aesthetic with hand-painted artwork, knowledgeable books on the shelves, and staff that guides without pressure. Community-first — they've fed the homeless during the holidays and stayed open through snow days. Named one of the best dispensaries in the tri-state area.",
+        'hours': '$hoursWeekdays9to9,"sunday":"10:00 AM – 5:00 PM"}',
+        'payment_methods': '["cash"]',
+        'ordering_platform': 'cash only',
+        'black_owned': 1,
+        'woman_owned': 0,
+        'lgbtq_friendly': 0,
+        'veteran_owned': 0,
+        'date_updated': 1781481600000,
+        'primary_color': '#2C1A08',
+        'secondary_color': '#8B6B47',
+        'background_color': '#1A0F04',
+      },
+      {
+        'id': 'c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f',
+        'dispensary_id': 'e5f9b3a2-8d7c-4e4f-ab60-2c9f3d8e5a7b',
+        'about': "Hoboken's welcoming CBD and hemp-derived THC boutique. THC beverages, Delta-8, CBD products, and holistic wellness. Knowledgeable staff that educates without pressure. A great entry point for first-timers.",
+        'hours': '{"monday":"11:00 AM – 10:00 PM","tuesday":"11:00 AM – 10:00 PM",'
+            '"wednesday":"11:00 AM – 10:00 PM","thursday":"11:00 AM – 10:00 PM",'
+            '"friday":"11:00 AM – 10:00 PM","saturday":"11:00 AM – 10:00 PM",'
+            '"sunday":"11:00 AM – 10:00 PM"}',
+        'payment_methods': '["cash","credit"]',
+        'ordering_platform': null,
+        'black_owned': 0,
+        'woman_owned': 0,
+        'lgbtq_friendly': 0,
+        'veteran_owned': 0,
+        'date_updated': 1781481600000,
+        'primary_color': '#1A3D20',
+        'secondary_color': '#4CAF50',
+        'background_color': '#0D1610',
+      },
+      {
+        'id': 'd3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a',
+        'dispensary_id': 'f6a0c4b3-9e8d-4f5a-bc71-3d0a4e9f6b8c',
+        'about': "One of Essex County's most celebrated dispensaries. 549 Bloomfield Ave, Bloomfield. Exceptional staff — Tekyah, Javier, and Laniya are mentioned by name in reviews. Welcoming from the moment you walk in, knowledgeable without being pushy, strong selection. 4.9 stars across 1,000+ reviews.",
+        'hours': '$hoursWeekdays9to9,"sunday":"11:00 AM – 7:00 PM"}',
+        'payment_methods': '["cash","debit"]',
+        'ordering_platform': null,
+        'black_owned': 0,
+        'woman_owned': 0,
+        'lgbtq_friendly': 0,
+        'veteran_owned': 0,
+        'date_updated': 1781481600000,
+        'primary_color': '#1A1A2E',
+        'secondary_color': '#7C3AED',
+        'background_color': '#0F0F1A',
+      },
+    ];
+
+    for (final p in profiles) {
+      await db.execute(
+        '''INSERT OR IGNORE INTO dispensary_profiles
+             (id, dispensary_id, about, hours, payment_methods, ordering_platform,
+              black_owned, woman_owned, lgbtq_friendly, veteran_owned, date_updated)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        [
+          p['id'], p['dispensary_id'], p['about'], p['hours'],
+          p['payment_methods'], p['ordering_platform'],
+          p['black_owned'], p['woman_owned'], p['lgbtq_friendly'],
+          p['veteran_owned'], p['date_updated'],
+        ],
+      );
+    }
+  }
+
+  // Backfill brand colors for the three seeded NJ operators — safe to call any time
+  // the color columns exist (v8+) and rows are present (v7+).
+  static Future<void> _seedNJProfileColors(Database db) async {
+    await db.execute("UPDATE dispensary_profiles SET primary_color='#2C1A08', secondary_color='#8B6B47', background_color='#1A0F04' WHERE dispensary_id='d4e8a2f1-7c6b-4d3e-9a5f-1b8e2c7d4f6a'");
+    await db.execute("UPDATE dispensary_profiles SET primary_color='#1A3D20', secondary_color='#4CAF50', background_color='#0D1610' WHERE dispensary_id='e5f9b3a2-8d7c-4e4f-ab60-2c9f3d8e5a7b'");
+    await db.execute("UPDATE dispensary_profiles SET primary_color='#1A1A2E', secondary_color='#7C3AED', background_color='#0F0F1A' WHERE dispensary_id='f6a0c4b3-9e8d-4f5a-bc71-3d0a4e9f6b8c'");
+  }
+
+  // Seed known NJ operators from StashPass — idempotent via OR IGNORE on stashpass_operator_id
+  static Future<void> _seedNJOperators(Database db) async {
+    const rows = [
+      ('d4e8a2f1-7c6b-4d3e-9a5f-1b8e2c7d4f6a', 'The Library',    'West Orange', 'NJ', 'dispensary',      '1612d608-8ebf-4afe-8cc2-4587f0e605e3'),
+      ('e5f9b3a2-8d7c-4e4f-ab60-2c9f3d8e5a7b', 'The Green Room', 'Hoboken',     'NJ', 'wellness_retail',  'a60df8bf-aea0-48fd-a740-ab3d52c02b0c'),
+      ('f6a0c4b3-9e8d-4f5a-bc71-3d0a4e9f6b8c', 'Nightjar',       'Bloomfield',  'NJ', 'dispensary',      'c03a8bcc-5599-4a3b-b5d5-bf62b2012c7b'),
+    ];
+    for (final (id, name, city, state, venueType, opId) in rows) {
+      await db.execute(
+        '''INSERT OR IGNORE INTO dispensaries (id, name, city, state, venue_type, stashpass_operator_id)
+           VALUES (?, ?, ?, ?, ?, ?)''',
+        [id, name, city, state, venueType, opId],
+      );
+    }
   }
 
   static Future<void> _createCirclesTables(Database db) async {
@@ -317,6 +447,40 @@ class AppDatabase {
       try { await db.execute('ALTER TABLE dispensaries ADD COLUMN staff_rating INTEGER'); } catch (_) {}
       try { await db.execute('ALTER TABLE dispensaries ADD COLUMN vibe_rating INTEGER'); } catch (_) {}
     }
+    if (oldVersion < 5) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS dispensary_profiles (
+          id TEXT PRIMARY KEY,
+          dispensary_id TEXT NOT NULL UNIQUE,
+          about TEXT,
+          hours TEXT,
+          website TEXT,
+          instagram TEXT,
+          leafly_url TEXT,
+          dutchie_url TEXT,
+          other_ordering_url TEXT,
+          ordering_platform TEXT,
+          payment_methods TEXT,
+          black_owned INTEGER NOT NULL DEFAULT 0,
+          woman_owned INTEGER NOT NULL DEFAULT 0,
+          lgbtq_friendly INTEGER NOT NULL DEFAULT 0,
+          veteran_owned INTEGER NOT NULL DEFAULT 0,
+          specials TEXT,
+          date_updated INTEGER
+        )''');
+    }
+    if (oldVersion < 6) {
+      await _seedNJOperators(db);
+    }
+    if (oldVersion < 7) {
+      await _seedNJProfiles(db);
+    }
+    if (oldVersion < 8) {
+      try { await db.execute('ALTER TABLE dispensary_profiles ADD COLUMN primary_color TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE dispensary_profiles ADD COLUMN secondary_color TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE dispensary_profiles ADD COLUMN background_color TEXT'); } catch (_) {}
+      await _seedNJProfileColors(db);
+    }
   }
 
   // ─── Strains ────────────────────────────────────────────────────────────────
@@ -333,6 +497,9 @@ class AppDatabase {
 
   static Future<void> insertStrain(Strain s) async =>
       (await db).insert('strains', s.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<void> updateStrain(Strain s) async =>
+      (await db).update('strains', s.toMap(), where: 'id = ?', whereArgs: [s.id]);
 
   // ─── Sessions ───────────────────────────────────────────────────────────────
 
@@ -383,6 +550,9 @@ class AppDatabase {
   static Future<void> updateDispensary(Dispensary d) async =>
       (await db).update('dispensaries', d.toMap(), where: 'id = ?', whereArgs: [d.id]);
 
+  static Future<void> deleteDispensary(String id) async =>
+      (await db).delete('dispensaries', where: 'id = ?', whereArgs: [id]);
+
   static Future<List<Map<String, dynamic>>> getSessionsForStrainId(String strainId) async =>
       (await db).rawQuery(
         'SELECT sess.*, str.name AS strain_name, str.strain_type, d.name AS dispensary_name '
@@ -392,6 +562,19 @@ class AppDatabase {
         'WHERE sess.strain_id = ? ORDER BY sess.session_at DESC',
         [strainId],
       );
+
+  // ─── Dispensary Profiles ────────────────────────────────────────────────────
+
+  static Future<DispensaryProfile?> getDispensaryProfile(String dispensaryId) async {
+    final rows = await (await db).query('dispensary_profiles', where: 'dispensary_id = ?', whereArgs: [dispensaryId]);
+    return rows.isEmpty ? null : DispensaryProfile.fromMap(rows.first);
+  }
+
+  static Future<void> upsertDispensaryProfile(DispensaryProfile p) async =>
+      (await db).insert('dispensary_profiles', p.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<void> deleteDispensaryProfile(String dispensaryId) async =>
+      (await db).delete('dispensary_profiles', where: 'dispensary_id = ?', whereArgs: [dispensaryId]);
 
   // ─── Circles ────────────────────────────────────────────────────────────────
 

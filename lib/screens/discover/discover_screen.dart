@@ -301,7 +301,6 @@ class _DispensaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = dispensary;
     final venueLabel = _venueLabels[d.venueType] ?? d.venueType ?? 'Retail';
-    final location = [d.city, d.state].where((v) => v != null && v.isNotEmpty).join(', ');
 
     return GestureDetector(
       onTap: () => context.push('/discover/dispensary/${d.id}'),
@@ -330,15 +329,13 @@ class _DispensaryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(d.name, style: const TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 15)),
-                  if (location.isNotEmpty)
-                    Text(location, style: const TextStyle(color: C.muted, fontSize: 12)),
+                  Text(venueLabel, style: const TextStyle(color: C.muted, fontSize: 12)),
                 ],
               ),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(venueLabel, style: const TextStyle(color: C.accent, fontSize: 12, fontWeight: FontWeight.w500)),
                 if (d.priceTier != null)
                   Text(
                     switch (d.priceTier) {
