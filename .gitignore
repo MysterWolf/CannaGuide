@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node/RN artifacts (legacy, do not re-commit)
+node_modules/
+CannaGuideApp/node_modules/
+CannaGuideTemp/node_modules/
+.expo/
