@@ -15,7 +15,7 @@ and tracking effects supports that goal; it is not the goal itself. Every featur
 should ask: *does this teach the user something?* Tracker features that don't teach do not
 belong in this app.
 
-**Current version:** 1.6.0+1  
+**Current version:** 1.7.0+1  
 **Package:** `com.mysterwolf.cannaguide`  
 **Repo:** https://github.com/MysterWolf/CannaGuide (branch: master)  
 **APK output:** `build/app/outputs/flutter-apk/app-release.apk`
