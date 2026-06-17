@@ -26,4 +26,9 @@ class StrainsProvider extends ChangeNotifier {
     await AppDatabase.updateStrain(s);
     await load();
   }
+
+  Future<void> delete(String id) async {
+    await AppDatabase.deleteStrain(id);
+    await load();
+  }
 }

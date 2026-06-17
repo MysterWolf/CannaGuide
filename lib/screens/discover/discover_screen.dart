@@ -1,10 +1,20 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../config.dart';
 import '../../db/models/dispensary.dart';
+import '../../db/models/dispensary_profile.dart';
 import '../../db/models/strain.dart';
+import '../../db/models/strain_profile.dart';
 import '../../providers/dispensaries_provider.dart';
+import '../../providers/dispensary_profiles_provider.dart';
+import '../../providers/strain_profiles_provider.dart';
 import '../../providers/strains_provider.dart';
 import '../../theme/colors.dart';
 
@@ -94,11 +104,127 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
   }
 }
 
-class _StrainsTab extends StatelessWidget {
+class _StrainsTab extends StatefulWidget {
   final String? typeFilter;
   final ValueChanged<String?> onTypeFilterChanged;
 
   const _StrainsTab({required this.typeFilter, required this.onTypeFilterChanged});
+
+  @override
+  State<_StrainsTab> createState() => _StrainsTabState();
+}
+
+class _StrainsTabState extends State<_StrainsTab> {
+  // Fire once per app lifecycle so the list refreshes from API on launch.
+  static bool _hasAutoSynced = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_hasAutoSynced) {
+      _hasAutoSynced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    context.read<StrainProfilesProvider>().clearCache();
+
+    try {
+      final res = await http
+          .get(Uri.parse('$kCirclesApiBase/strains'))
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200 || !mounted) return;
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final apiStrains = (data['strains'] as List?) ?? [];
+
+      final strainsProvider = context.read<StrainsProvider>();
+      final byStashpassId = <String, Strain>{
+        for (final s in strainsProvider.strains)
+          if (s.stashpassStrainId != null) s.stashpassStrainId!: s,
+      };
+
+      final profilesProvider = context.read<StrainProfilesProvider>();
+      for (final st in apiStrains) {
+        final stId = st['id'] as String?;
+        if (stId == null) continue;
+
+        Strain? strain = byStashpassId[stId];
+        if (strain == null) {
+          // New strain — create local record
+          strain = Strain(
+            id: const Uuid().v4(),
+            name: st['name'] as String? ?? 'Unknown',
+            strainType: st['strain_type'] as String?,
+            stashpassStrainId: stId,
+            source: 'stashpass',
+          );
+          await strainsProvider.add(strain);
+        } else {
+          // Existing — update API-sourced fields; preserve user data
+          final updated = Strain(
+            id: strain.id,
+            name: st['name'] as String? ?? strain.name,
+            strainType: st['strain_type'] as String? ?? strain.strainType,
+            brand: strain.brand,
+            thcPct: strain.thcPct,
+            cbdPct: strain.cbdPct,
+            terpeneProfile: strain.terpeneProfile,
+            cannabinoidProfile: strain.cannabinoidProfile,
+            description: strain.description,
+            source: strain.source,
+            sourceType: strain.sourceType,
+            createdAt: strain.createdAt,
+            category: strain.category,
+            notes: strain.notes,
+            dispensaryId: strain.dispensaryId,
+            stashpassStrainId: strain.stashpassStrainId,
+          );
+          await strainsProvider.update(updated);
+          strain = updated;
+        }
+
+        final rawProfile = st['profile'] as Map<String, dynamic>?;
+        if (rawProfile == null) continue;
+        await profilesProvider.save(_strainProfileFromApi(strain.id, rawProfile));
+      }
+    } catch (_) {
+      // Network or DB error — fall through to reload cached data
+    }
+
+    if (mounted) await context.read<StrainsProvider>().load();
+  }
+
+  StrainProfile _strainProfileFromApi(String strainId, Map<String, dynamic> p) {
+    String? _encodeList(dynamic v) =>
+        v == null ? null : jsonEncode(v);
+
+    return StrainProfile(
+      id: const Uuid().v4(),
+      strainId: strainId,
+      aliases: _encodeList(p['aliases']),
+      lineage: p['lineage'] as String?,
+      thcMin: _parseDouble(p['thc_min']),
+      thcMax: _parseDouble(p['thc_max']),
+      cbdMin: _parseDouble(p['cbd_min']),
+      cbdMax: _parseDouble(p['cbd_max']),
+      terpenes: _encodeList(p['terpenes']),
+      primaryEffects: _encodeList(p['primary_effects']),
+      useCases: _encodeList(p['use_cases']),
+      flavorProfile: _encodeList(p['flavor_profile']),
+      about: p['about'] as String?,
+      cautions: p['cautions'] as String?,
+      bestMethod: p['best_method'] as String?,
+      beginnerFriendly:
+          (p['beginner_friendly'] == true || p['beginner_friendly'] == 1) ? 1 : 0,
+      dateUpdated: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  static double? _parseDouble(Object? v) =>
+      v == null ? null : (v is num ? v.toDouble() : double.tryParse(v.toString()));
 
   @override
   Widget build(BuildContext context) {
@@ -108,118 +234,298 @@ class _StrainsTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator(color: C.accent));
         }
 
-        final filtered = typeFilter == null
+        final filtered = widget.typeFilter == null
             ? provider.strains
-            : provider.strains.where((s) => s.strainType?.toLowerCase() == typeFilter).toList();
+            : provider.strains
+                .where((s) => s.strainType?.toLowerCase() == widget.typeFilter)
+                .toList();
 
-        return CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    _FilterChip(label: 'All', selected: typeFilter == null, onTap: () => onTypeFilterChanged(null)),
-                    const SizedBox(width: 8),
-                    _FilterChip(label: 'Sativa', selected: typeFilter == 'sativa', color: C.sage, onTap: () => onTypeFilterChanged(typeFilter == 'sativa' ? null : 'sativa')),
-                    const SizedBox(width: 8),
-                    _FilterChip(label: 'Hybrid', selected: typeFilter == 'hybrid', color: C.amber, onTap: () => onTypeFilterChanged(typeFilter == 'hybrid' ? null : 'hybrid')),
-                    const SizedBox(width: 8),
-                    _FilterChip(label: 'Indica', selected: typeFilter == 'indica', color: C.danger, onTap: () => onTypeFilterChanged(typeFilter == 'indica' ? null : 'indica')),
-                  ],
-                ),
-              ),
-            ),
-            if (filtered.isEmpty)
-              const SliverFillRemaining(
-                child: Center(child: Text('No strains yet', style: TextStyle(color: C.muted))),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) => _StrainCard(strain: filtered[i]),
-                    childCount: filtered.length,
+        return RefreshIndicator(
+          color: C.accent,
+          onRefresh: _refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      _FilterChip(
+                        label: 'All',
+                        selected: widget.typeFilter == null,
+                        onTap: () => widget.onTypeFilterChanged(null),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Sativa',
+                        selected: widget.typeFilter == 'sativa',
+                        color: C.sage,
+                        onTap: () => widget.onTypeFilterChanged(
+                            widget.typeFilter == 'sativa' ? null : 'sativa'),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Hybrid',
+                        selected: widget.typeFilter == 'hybrid',
+                        color: C.amber,
+                        onTap: () => widget.onTypeFilterChanged(
+                            widget.typeFilter == 'hybrid' ? null : 'hybrid'),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Indica',
+                        selected: widget.typeFilter == 'indica',
+                        color: C.danger,
+                        onTap: () => widget.onTypeFilterChanged(
+                            widget.typeFilter == 'indica' ? null : 'indica'),
+                      ),
+                    ],
                   ),
                 ),
               ),
-          ],
+              if (filtered.isEmpty)
+                const SliverFillRemaining(
+                  child: Center(
+                      child: Text('No strains yet',
+                          style: TextStyle(color: C.muted))),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => _StrainCard(strain: filtered[i]),
+                      childCount: filtered.length,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
   }
 }
 
-class _DispensariesTab extends StatelessWidget {
+class _DispensariesTab extends StatefulWidget {
   final String? venueFilter;
   final ValueChanged<String?> onVenueFilterChanged;
 
   const _DispensariesTab({required this.venueFilter, required this.onVenueFilterChanged});
 
   @override
+  State<_DispensariesTab> createState() => _DispensariesTabState();
+}
+
+class _DispensariesTabState extends State<_DispensariesTab> {
+  static const _fallbackLat = 40.744;
+  static const _fallbackLng = -74.032;
+  static const _radiusKm = 80.0;
+
+  Future<void> _refresh() async {
+    // 1 — Clear the in-memory operator profile cache
+    if (!mounted) return;
+    context.read<DispensaryProfilesProvider>().clearCache();
+
+    // 2 — Get device location; fall back to Hoboken if unavailable
+    double lat = _fallbackLat, lng = _fallbackLng;
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        var perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) {
+          perm = await Geolocator.requestPermission();
+        }
+        if (perm == LocationPermission.whileInUse || perm == LocationPermission.always) {
+          final pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 10),
+            ),
+          );
+          lat = pos.latitude;
+          lng = pos.longitude;
+        }
+      }
+    } catch (_) {
+      // use fallback coordinates
+    }
+
+    // 3 — Fetch nearby operators from StashPass API
+    try {
+      final res = await http.get(Uri.parse(
+        '$kCirclesApiBase/operators/nearby?lat=$lat&lng=$lng&radius=$_radiusKm',
+      )).timeout(const Duration(seconds: 15));
+
+      if (res.statusCode != 200 || !mounted) return;
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final operators = (data['operators'] as List?) ?? [];
+      print('[sync] fetched ${operators.length} operators from API');
+
+      // 4 — Build a lookup map of local dispensaries keyed by stashpassOperatorId
+      final dispensariesProvider = context.read<DispensariesProvider>();
+      final byOpId = <String, Dispensary>{
+        for (final d in dispensariesProvider.dispensaries)
+          if (d.stashpassOperatorId != null) d.stashpassOperatorId!: d,
+      };
+
+      // 5 — Upsert profiles for matched dispensaries; auto-create/update local records
+      final profilesProvider = context.read<DispensaryProfilesProvider>();
+      for (final op in operators) {
+        final opId = op['id'] as String?;
+        if (opId == null) continue;
+
+        final resolvedVenueType = op['subcategory'] as String? ?? op['category'] as String?;
+        print('[sync] ${op['name']} category=${op['category']} subcategory=${op['subcategory']} resolved=$resolvedVenueType');
+
+        Dispensary? dispensary = byOpId[opId];
+        if (dispensary == null) {
+          // New operator — create local record
+          dispensary = Dispensary(
+            id: const Uuid().v4(),
+            name: op['name'] as String? ?? 'Unknown',
+            city: op['city'] as String?,
+            state: op['state'] as String?,
+            venueType: resolvedVenueType,
+            stashpassOperatorId: opId,
+            wouldGoBack: 1,
+          );
+          await dispensariesProvider.add(dispensary);
+          print('[sync] created local dispensary for ${op['name']} venueType=$resolvedVenueType');
+        } else {
+          // Existing record — update API-sourced fields; preserve user ratings/notes
+          final updated = Dispensary(
+            id: dispensary.id,
+            name: op['name'] as String? ?? dispensary.name,
+            city: op['city'] as String? ?? dispensary.city,
+            state: op['state'] as String? ?? dispensary.state,
+            venueType: resolvedVenueType ?? dispensary.venueType,
+            apiSource: dispensary.apiSource,
+            externalId: dispensary.externalId,
+            vibeRating: dispensary.vibeRating,
+            priceTier: dispensary.priceTier,
+            staffRating: dispensary.staffRating,
+            wouldGoBack: dispensary.wouldGoBack,
+            createdAt: dispensary.createdAt,
+            stashpassOperatorId: dispensary.stashpassOperatorId,
+            notes: dispensary.notes,
+          );
+          await dispensariesProvider.update(updated);
+          dispensary = updated;
+          print('[sync] updated existing dispensary for ${op['name']} venueType=$resolvedVenueType');
+        }
+
+        final rawProfile = op['profile'] as Map<String, dynamic>?;
+        if (rawProfile == null) continue;
+
+        await profilesProvider.save(_profileFromApi(dispensary.id, rawProfile));
+      }
+    } catch (_) {
+      // Network or DB error — silently fall through to list reload
+    }
+
+    // 6 — Reload dispensary list from DB
+    if (mounted) await context.read<DispensariesProvider>().load();
+  }
+
+  DispensaryProfile _profileFromApi(String dispensaryId, Map<String, dynamic> p) {
+    int _flag(dynamic v) => (v == true || v == 1) ? 1 : 0;
+
+    return DispensaryProfile(
+      id: const Uuid().v4(),
+      dispensaryId: dispensaryId,
+      about: p['about'] as String?,
+      hours: p['hours'] != null ? jsonEncode(p['hours']) : null,
+      website: p['website'] as String?,
+      instagram: p['instagram'] as String?,
+      leaflyUrl: p['leafly_url'] as String?,
+      dutchieUrl: p['dutchie_url'] as String?,
+      otherOrderingUrl: p['other_ordering_url'] as String?,
+      orderingPlatform: p['ordering_platform'] as String?,
+      paymentMethods: p['payment_methods'] != null ? jsonEncode(p['payment_methods']) : null,
+      blackOwned: _flag(p['black_owned']),
+      womanOwned: _flag(p['woman_owned']),
+      lgbtqFriendly: _flag(p['lgbtq_friendly']),
+      veteranOwned: _flag(p['veteran_owned']),
+      specials: p['specials'] != null ? jsonEncode(p['specials']) : null,
+      dateUpdated: DateTime.now().millisecondsSinceEpoch,
+      primaryColor: p['primary_color'] as String?,
+      secondaryColor: p['secondary_color'] as String?,
+      backgroundColor: p['background_color'] as String?,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<DispensariesProvider>(
       builder: (context, provider, _) {
+        print('[discover] local dispensaries count: ${provider.dispensaries.length}');
+        print('[discover] operator profiles loaded: ${context.read<DispensaryProfilesProvider>().profileCount}');
         if (provider.loading) {
           return const Center(child: CircularProgressIndicator(color: C.accent));
         }
 
-        final filtered = venueFilter == null
+        final filtered = widget.venueFilter == null
             ? provider.dispensaries
-            : provider.dispensaries.where((d) => d.venueType == venueFilter).toList();
+            : provider.dispensaries.where((d) => d.venueType == widget.venueFilter).toList();
 
-        // Distinct venue types for filter chips
         final types = provider.dispensaries
             .map((d) => d.venueType)
             .whereType<String>()
             .toSet()
             .toList();
 
-        return CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All',
-                      selected: venueFilter == null,
-                      onTap: () => onVenueFilterChanged(null),
-                    ),
-                    ...types.map((t) {
-                      final sel = venueFilter == t;
-                      return Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: _FilterChip(
-                          label: _venueLabels[t] ?? t,
-                          selected: sel,
-                          onTap: () => onVenueFilterChanged(sel ? null : t),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ),
-            if (filtered.isEmpty)
-              const SliverFillRemaining(
-                child: Center(child: Text('No dispensaries yet', style: TextStyle(color: C.muted))),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) => _DispensaryCard(dispensary: filtered[i]),
-                    childCount: filtered.length,
+        return RefreshIndicator(
+          color: C.accent,
+          onRefresh: _refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      _FilterChip(
+                        label: 'All',
+                        selected: widget.venueFilter == null,
+                        onTap: () => widget.onVenueFilterChanged(null),
+                      ),
+                      ...types.map((t) {
+                        final sel = widget.venueFilter == t;
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: _FilterChip(
+                            label: _venueLabels[t] ?? t,
+                            selected: sel,
+                            onTap: () => widget.onVenueFilterChanged(sel ? null : t),
+                          ),
+                        );
+                      }),
+                    ],
                   ),
                 ),
               ),
-          ],
+              if (filtered.isEmpty)
+                const SliverFillRemaining(
+                  child: Center(child: Text('No dispensaries yet', style: TextStyle(color: C.muted))),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => _DispensaryCard(dispensary: filtered[i]),
+                      childCount: filtered.length,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );

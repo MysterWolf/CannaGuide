@@ -7,10 +7,11 @@ import 'models/dispensary.dart';
 import 'models/dispensary_profile.dart';
 import 'models/session.dart';
 import 'models/strain.dart';
+import 'models/strain_profile.dart';
 
 class AppDatabase {
   static const _dbName = 'cannaguide.db';
-  static const _dbVersion = 8;
+  static const _dbVersion = 10;
 
   static Database? _db;
 
@@ -78,7 +79,8 @@ class AppDatabase {
         updated_at TEXT DEFAULT (datetime('now')),
         category TEXT,
         notes TEXT,
-        dispensary_id TEXT
+        dispensary_id TEXT,
+        stashpass_strain_id TEXT
       )''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_strains_name ON strains(name)');
 
@@ -259,6 +261,27 @@ class AppDatabase {
 
     await _seedNJProfiles(db);
     await _seedNJProfileColors(db);
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS strain_profiles (
+        id TEXT PRIMARY KEY,
+        strain_id TEXT NOT NULL UNIQUE,
+        aliases TEXT,
+        lineage TEXT,
+        thc_min REAL,
+        thc_max REAL,
+        cbd_min REAL,
+        cbd_max REAL,
+        terpenes TEXT,
+        primary_effects TEXT,
+        use_cases TEXT,
+        flavor_profile TEXT,
+        about TEXT,
+        cautions TEXT,
+        best_method TEXT,
+        beginner_friendly INTEGER DEFAULT 0,
+        date_updated INTEGER
+      )''');
 
     await db.execute('''
       CREATE VIEW IF NOT EXISTS v_diary AS
@@ -481,6 +504,38 @@ class AppDatabase {
       try { await db.execute('ALTER TABLE dispensary_profiles ADD COLUMN background_color TEXT'); } catch (_) {}
       await _seedNJProfileColors(db);
     }
+    if (oldVersion < 9) {
+      // Devices that went through _onCreate with backup (user_version=0) skipped
+      // the _onUpgrade < 3 path and never got notes added to dispensaries.
+      try { await db.execute('ALTER TABLE dispensaries ADD COLUMN notes TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE strains ADD COLUMN notes TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE strains ADD COLUMN category TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE strains ADD COLUMN dispensary_id TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE strains ADD COLUMN stashpass_operator_id TEXT'); } catch (_) {}
+    }
+    if (oldVersion < 10) {
+      try { await db.execute('ALTER TABLE strains ADD COLUMN stashpass_strain_id TEXT'); } catch (_) {}
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS strain_profiles (
+          id TEXT PRIMARY KEY,
+          strain_id TEXT NOT NULL UNIQUE,
+          aliases TEXT,
+          lineage TEXT,
+          thc_min REAL,
+          thc_max REAL,
+          cbd_min REAL,
+          cbd_max REAL,
+          terpenes TEXT,
+          primary_effects TEXT,
+          use_cases TEXT,
+          flavor_profile TEXT,
+          about TEXT,
+          cautions TEXT,
+          best_method TEXT,
+          beginner_friendly INTEGER DEFAULT 0,
+          date_updated INTEGER
+        )''');
+    }
   }
 
   // ─── Strains ────────────────────────────────────────────────────────────────
@@ -500,6 +555,9 @@ class AppDatabase {
 
   static Future<void> updateStrain(Strain s) async =>
       (await db).update('strains', s.toMap(), where: 'id = ?', whereArgs: [s.id]);
+
+  static Future<void> deleteStrain(String id) async =>
+      (await db).delete('strains', where: 'id = ?', whereArgs: [id]);
 
   // ─── Sessions ───────────────────────────────────────────────────────────────
 
@@ -575,6 +633,19 @@ class AppDatabase {
 
   static Future<void> deleteDispensaryProfile(String dispensaryId) async =>
       (await db).delete('dispensary_profiles', where: 'dispensary_id = ?', whereArgs: [dispensaryId]);
+
+  // ─── Strain Profiles ────────────────────────────────────────────────────────
+
+  static Future<StrainProfile?> getStrainProfile(String strainId) async {
+    final rows = await (await db).query('strain_profiles', where: 'strain_id = ?', whereArgs: [strainId]);
+    return rows.isEmpty ? null : StrainProfile.fromMap(rows.first);
+  }
+
+  static Future<void> upsertStrainProfile(StrainProfile p) async =>
+      (await db).insert('strain_profiles', p.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static Future<void> deleteStrainProfile(String strainId) async =>
+      (await db).delete('strain_profiles', where: 'strain_id = ?', whereArgs: [strainId]);
 
   // ─── Circles ────────────────────────────────────────────────────────────────
 

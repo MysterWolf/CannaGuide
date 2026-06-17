@@ -15,6 +15,7 @@ class Strain {
   final String? category;
   final String? notes;
   final String? dispensaryId;
+  final String? stashpassStrainId;
 
   const Strain({
     required this.id,
@@ -33,6 +34,7 @@ class Strain {
     this.category,
     this.notes,
     this.dispensaryId,
+    this.stashpassStrainId,
   });
 
   Strain copyWith({
@@ -46,6 +48,7 @@ class Strain {
     String? category,
     String? notes,
     String? dispensaryId,
+    String? stashpassStrainId,
     String? updatedAt,
     bool clearBrand = false,
     bool clearNotes = false,
@@ -67,6 +70,7 @@ class Strain {
     category: category ?? this.category,
     notes: clearNotes ? null : (notes ?? this.notes),
     dispensaryId: clearDispensaryId ? null : (dispensaryId ?? this.dispensaryId),
+    stashpassStrainId: stashpassStrainId ?? this.stashpassStrainId,
   );
 
   factory Strain.fromMap(Map<String, dynamic> m) => Strain(
@@ -74,8 +78,8 @@ class Strain {
         name: m['name'] as String,
         brand: m['brand'] as String?,
         strainType: m['strain_type'] as String?,
-        thcPct: (m['thc_pct'] as num?)?.toDouble(),
-        cbdPct: (m['cbd_pct'] as num?)?.toDouble(),
+        thcPct: _parseDouble(m['thc_pct']),
+        cbdPct: _parseDouble(m['cbd_pct']),
         terpeneProfile: m['terpene_profile'] as String?,
         cannabinoidProfile: m['cannabinoid_profile'] as String?,
         description: m['description'] as String?,
@@ -86,7 +90,11 @@ class Strain {
         category: m['category'] as String?,
         notes: m['notes'] as String?,
         dispensaryId: m['dispensary_id'] as String?,
+        stashpassStrainId: m['stashpass_strain_id'] as String?,
       );
+
+  static double? _parseDouble(Object? v) =>
+      v == null ? null : (v is num ? v.toDouble() : double.tryParse(v.toString()));
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -105,5 +113,6 @@ class Strain {
         'category': category,
         'notes': notes,
         'dispensary_id': dispensaryId,
+        'stashpass_strain_id': stashpassStrainId,
       };
 }

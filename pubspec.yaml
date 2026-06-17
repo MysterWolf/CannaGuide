@@ -2,7 +2,7 @@ name: cannaguide
 description: "CannaGuide — cannabis advisor and session journal with AI-powered strain recommendations."
 publish_to: 'none'
 
-version: 1.7.0+1
+version: 1.9.0+1
 
 environment:
   sdk: ^3.11.5
@@ -40,6 +40,9 @@ dependencies:
 
   # URL launching (Maps, links)
   url_launcher: ^6.3.1
+
+  # Location
+  geolocator: ^13.0.1
 
   cupertino_icons: ^1.0.8
 

@@ -15,7 +15,7 @@ and tracking effects supports that goal; it is not the goal itself. Every featur
 should ask: *does this teach the user something?* Tracker features that don't teach do not
 belong in this app.
 
-**Current version:** 1.7.0+1  
+**Current version:** 1.9.0+1  
 **Package:** `com.mysterwolf.cannaguide`  
 **Repo:** https://github.com/MysterWolf/CannaGuide (branch: master)  
 **APK output:** `build/app/outputs/flutter-apk/app-release.apk`
@@ -52,14 +52,17 @@ lib/
 ├── db/
 │   ├── database.dart       — AppDatabase singleton; copies backup on first launch
 │   └── models/
-│       ├── strain.dart     — +category, +notes, +dispensaryId (v3)
+│       ├── strain.dart     — +category, +notes, +dispensaryId (v3), +stashpassStrainId (v10)
+│       ├── strain_profile.dart — curated intelligence from StashPass (v10)
 │       ├── session.dart
-│       └── dispensary.dart — +notes (v3)
+│       └── dispensary.dart — +notes (v3), +stashpassOperatorId
 ├── providers/
-│   ├── sessions_provider.dart    — add()
-│   ├── strains_provider.dart     — add()
-│   ├── dispensaries_provider.dart — load(), add()
-│   ├── settings_provider.dart    — +themeMode
+│   ├── sessions_provider.dart          — add()
+│   ├── strains_provider.dart           — add(), update()
+│   ├── strain_profiles_provider.dart   — Map cache keyed by strainId; load(), save(), clearCache()
+│   ├── dispensaries_provider.dart      — load(), add(), update()
+│   ├── dispensary_profiles_provider.dart — Map cache keyed by dispensaryId
+│   ├── settings_provider.dart          — +themeMode
 │   └── circles_provider.dart
 ├── screens/
 │   ├── home/home_screen.dart           — quick actions + session diary
@@ -149,11 +152,11 @@ C.white       #FFFFFF
 
 ## Database (`lib/db/database.dart`)
 
-sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **4**.
+sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **10**.
 
 **First-launch migration:** On first launch (db file absent), `AppDatabase._open()` copies `assets/cannaguide_backup.db` to the database path before `openDatabase`. This preserved 10 strains, 10 sessions, 3 dispensaries from the RN version.
 
-**Schema version:** `user_version = 0` in the original backup → sqflite calls `_onCreate` with `IF NOT EXISTS` guards (no-op for existing tables, creates fresh on new installs). Future schema changes go in `_onUpgrade`.
+**Schema version:** `user_version = 0` in the original backup → sqflite calls `_onCreate` (not `_onUpgrade`) because it treats version 0 as a fresh DB. `IF NOT EXISTS` guards make CREATE TABLE calls no-ops for existing backup tables — so the backup schema is kept as-is and `_onUpgrade` column additions are skipped. **Critical invariant: always add new columns in BOTH `_onCreate` (in the CREATE TABLE) AND `_onUpgrade` (with try/catch ALTER TABLE) so devices on any migration path get the column.**
 
 ### Tables
 
@@ -170,8 +173,10 @@ sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **4*
 | `_schema_version` | Migration history |
 | `v_diary` (view) | Sessions joined to strains + dispensaries, ordered DESC |
 | `v_strain_ratings` (view) | Strains with avg effect scores across sessions |
+| `dispensary_profiles` | Operator profile — branding, hours, payment, specials, links |
+| `strain_profiles` | Curated strain intelligence — terpenes, effects, flavors, use cases, cannabinoid ranges |
 
-**Migration pattern:** Add new columns with try/catch-wrapped `ALTER TABLE ... ADD COLUMN` inside `_onUpgrade`, never in the base `_onCreate`. SQLite doesn't support `IF NOT EXISTS` on ALTER TABLE — wrap each column addition in try/catch to handle pre-existing columns safely.
+**Migration pattern:** Add new columns in BOTH places: in the `CREATE TABLE` in `_onCreate` (for fresh installs), AND in `_onUpgrade` wrapped in try/catch (for upgrade paths). SQLite doesn't support `IF NOT EXISTS` on ALTER TABLE — always wrap in try/catch. Never assume `_onUpgrade` runs for backup-based installs (see schema version note above).
 
 ---
 
@@ -181,12 +186,47 @@ sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **4*
 |---|---|
 | `SessionsProvider` | `List<Map>` from `v_diary`; `add(Session)` inserts + reloads |
 | `StrainsProvider` | `List<Strain>`; `add(Strain)` inserts + reloads |
-| `DispensariesProvider` | `List<Dispensary>`; `add(Dispensary)` inserts + reloads |
+| `DispensariesProvider` | `List<Dispensary>`; `add(Dispensary)` inserts + reloads; `update(Dispensary)` updates + reloads |
 | `SettingsProvider` | Claude API key, user tier, `ThemeMode` — persisted in SharedPreferences |
 | `CirclesProvider` | Local user identity (UUID + display name + avatar); all Circles CRUD |
 
 All providers loaded lazily on first screen visit. `SettingsProvider` auto-loads on construction.
 Display name and avatar are owned by `CirclesProvider.profile` — Settings screen writes via `CirclesProvider.saveProfile()`.
+
+---
+
+## StashPass Sync
+
+**StashPass is the source of truth.** Dispensaries are created and managed in StashPass Admin, then synced into CannaGuide — not the other way around.
+
+`_DispensariesTabState._refresh()` in `discover_screen.dart` runs on pull-to-refresh:
+1. Clears `DispensaryProfilesProvider` in-memory cache
+2. Gets GPS (falls back to Hoboken `40.744 / -74.032` if unavailable)
+3. Calls `GET /operators/nearby?lat=&lng=&radius=80` (80 km radius)
+4. Builds a lookup map of local dispensaries keyed by `stashpassOperatorId`
+5. For each API operator:
+   - **New operator** (not in local DB): creates a `Dispensary` record via `provider.add()`. `venueType` = `op['subcategory'] ?? op['category']`
+   - **Existing operator** (matched by `stashpassOperatorId`): updates name/city/state/venueType via `provider.update()`. User-set fields (ratings, notes, priceTier, wouldGoBack) are preserved.
+   - Upserts the operator's profile into `DispensaryProfilesProvider`
+6. Reloads dispensary list from DB
+
+**venueType mapping**: StashPass `subcategory` (e.g. `dispensary`, `smoke_shop`, `wellness_retail`) maps directly to CannaGuide venue types. If subcategory is null, falls back to `category` (e.g. `cannabis`, `wellness_retail`). Subcategories are set per-operator in StashPass Admin via the "edit category" link on the operator edit page.
+
+**AddDispensaryScreen**: for local-only dispensaries not in StashPass. Has a "StashPass Operator ID (optional)" field to manually link a local record to a StashPass operator.
+
+### Strain Sync
+
+`_StrainsTabState._refresh()` in `discover_screen.dart` runs on pull-to-refresh and once on app launch:
+1. Clears `StrainProfilesProvider` in-memory cache
+2. Calls `GET /strains` on the StashPass API
+3. Builds a lookup map of local strains keyed by `stashpassStrainId`
+4. For each API strain:
+   - **New strain** (not in local DB): creates a `Strain` record via `provider.add()` with `source = 'stashpass'`
+   - **Existing strain** (matched by `stashpassStrainId`): updates `name` and `strainType` via `provider.update()`. User fields (`brand`, `thcPct`, `cbdPct`, `terpeneProfile`, `notes`, `category`, `dispensaryId`) are preserved unconditionally.
+   - Upserts the strain's curated profile into `StrainProfilesProvider`
+5. Reloads strain list from DB
+
+Profile data goes into `strain_profiles` table (keyed UNIQUE on `strain_id`). On `StrainDetailScreen`, when a profile exists, a "Curated Intelligence" section is shown with terpenes, effects, flavors, use cases, cannabinoid ranges, cautions, and best method.
 
 ---
 
@@ -242,6 +282,19 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 ---
 
 ## Changelog
+
+### v1.9.0 — Strain sync + curated intelligence (2026-06-17)
+- **DB version 10**: `stashpass_strain_id TEXT` added to `strains` table; new `strain_profiles` table (UNIQUE on `strain_id`) with 17 columns: aliases, lineage, thc_min/max, cbd_min/max, terpenes (JSON), primary_effects (JSON), use_cases (JSON), flavor_profile (JSON), about, cautions, best_method, beginner_friendly, date_updated
+- **Strain sync**: `_StrainsTabState._refresh()` in `discover_screen.dart` — mirrors dispensary sync. Calls `GET /strains` on StashPass API. Match key: `stashpass_strain_id`. New strains created with `source='stashpass'`. Existing strains: `name` and `strain_type` overwritten from API; all user fields (`brand`, `thcPct`, `cbdPct`, `terpeneProfile`, `notes`, `category`, `dispensaryId`) preserved unconditionally. Sessions untouched.
+- **StrainProfilesProvider**: Map-based cache keyed by `strainId`; `clearCache()`, `load()`, `save()`, `delete()`. Registered in `main.dart` MultiProvider. Profile upserted per sync loop iteration via `ConflictAlgorithm.replace`.
+- **`_StrainsTab`**: converted from `StatelessWidget` to `StatefulWidget`. Auto-syncs once on app launch (`_hasAutoSynced` static flag). Pull-to-refresh triggers `_refresh()`. `RefreshIndicator` + `AlwaysScrollableScrollPhysics` added.
+- **StrainDetailScreen**: loads strain profile in `_load()` via `StrainProfilesProvider.load()`. When profile has content, shows `_StrainProfileSection` below the notes card: cannabinoid range chips (THC/CBD), about text, effects chips (sage), flavor chips (amber), terpene list with effects, use cases chips (blue), cautions with warning icon, beginner-friendly badge, lineage + best method metadata.
+
+### v1.8.0 — StashPass sync fixes + subcategory support (2026-06-17)
+- **DB version 9**: migration `if (oldVersion < 9)` adds missing columns (`dispensaries.notes`, `strains.notes/category/dispensary_id`) with try/catch for devices whose backup migration went through `_onCreate` instead of `_onUpgrade` and permanently skipped column additions
+- **Sync update branch**: `_refresh()` in `discover_screen.dart` now updates existing local dispensary records when the StashPass API has new data; previously only new (unmatched) operators got a local record — existing records were never refreshed. Uses `dispensariesProvider.update()`, preserving all user-set fields (ratings, notes, priceTier) while refreshing name/city/state/venueType from API
+- **venueType from subcategory**: `venueType` on auto-created/updated dispensaries now resolves as `op['subcategory'] ?? op['category']` — StashPass subcategory (e.g. `dispensary`) takes precedence over market category (e.g. `cannabis`), so CannaGuide venue labels match correctly
+- **StashPass Operator ID field**: `AddDispensaryScreen` has a "StashPass Operator ID (optional)" field for manually linking local dispensaries to StashPass operators
 
 ### v1.7.0 — Dispensary hero logo (2026-06-16)
 - `_RichProfileScreenState`: added `String? _logoUrl` state; `_fetchOperatorProfile()` calls `GET /operators/:id/profile` on init when `stashpassOperatorId` is set, extracts `logo_url`, validates it's a reachable http/https URL before storing

@@ -8,6 +8,7 @@ import 'providers/dispensaries_provider.dart';
 import 'providers/dispensary_profiles_provider.dart';
 import 'providers/sessions_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/strain_profiles_provider.dart';
 import 'providers/strains_provider.dart';
 import 'app.dart';
 import 'services/notification_service.dart';
@@ -30,6 +31,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SettingsProvider()..load()),
         ChangeNotifierProvider(create: (_) => SessionsProvider()),
         ChangeNotifierProvider(create: (_) => StrainsProvider()),
+        ChangeNotifierProvider(create: (_) => StrainProfilesProvider()),
         ChangeNotifierProvider(create: (_) => DispensariesProvider()),
         ChangeNotifierProvider(create: (_) => DispensaryProfilesProvider()),
         ChangeNotifierProvider(create: (_) => CirclesProvider()),
