@@ -39,6 +39,7 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
   final _cityCtrl = TextEditingController();
   final _stateCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final _operatorIdCtrl = TextEditingController();
   String _venueType = 'dispensary';
   String _priceTier = 'mid';
   int? _staffRating;
@@ -62,6 +63,7 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
       _cityCtrl.text = d.city ?? '';
       _stateCtrl.text = d.state ?? '';
       _notesCtrl.text = d.notes ?? '';
+      _operatorIdCtrl.text = d.stashpassOperatorId ?? '';
       setState(() {
         _venueType = d.venueType ?? 'dispensary';
         _priceTier = d.priceTier ?? 'mid';
@@ -80,6 +82,7 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
     _cityCtrl.dispose();
     _stateCtrl.dispose();
     _notesCtrl.dispose();
+    _operatorIdCtrl.dispose();
     super.dispose();
   }
 
@@ -111,26 +114,35 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
     setState(() => _saving = true);
-    final d = Dispensary(
-      id: _existing?.id ?? _uuid.v4(),
-      name: name,
-      city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
-      state: _stateCtrl.text.trim().isEmpty ? null : _stateCtrl.text.trim(),
-      venueType: _venueType,
-      priceTier: _priceTier,
-      staffRating: _staffRating,
-      vibeRating: _vibeRating,
-      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      wouldGoBack: _existing?.wouldGoBack ?? 1,
-      stashpassOperatorId: _existing?.stashpassOperatorId,
-    );
-    final provider = context.read<DispensariesProvider>();
-    if (widget.isEditing) {
-      await provider.update(d);
-    } else {
-      await provider.add(d);
+    try {
+      final d = Dispensary(
+        id: _existing?.id ?? _uuid.v4(),
+        name: name,
+        city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+        state: _stateCtrl.text.trim().isEmpty ? null : _stateCtrl.text.trim(),
+        venueType: _venueType,
+        priceTier: _priceTier,
+        staffRating: _staffRating,
+        vibeRating: _vibeRating,
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        wouldGoBack: _existing?.wouldGoBack ?? 1,
+        stashpassOperatorId: _operatorIdCtrl.text.trim().isEmpty ? null : _operatorIdCtrl.text.trim(),
+      );
+      final provider = context.read<DispensariesProvider>();
+      if (widget.isEditing) {
+        await provider.update(d);
+      } else {
+        await provider.add(d);
+      }
+      if (mounted) context.pop();
+    } catch (e) {
+      setState(() => _saving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e'), backgroundColor: C.danger),
+        );
+      }
     }
-    if (mounted) context.pop();
   }
 
   @override
@@ -249,6 +261,14 @@ class _AddDispensaryScreenState extends State<AddDispensaryScreen> {
               controller: _notesCtrl,
               maxLines: 3,
               decoration: _dec('Anything worth remembering…'),
+            ),
+
+            const SizedBox(height: 20),
+            _label('StashPass Operator ID (optional)'),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _operatorIdCtrl,
+              decoration: _dec('e.g. a60df8bf-aea0-48fd-a740-ab3d52c02b0c'),
             ),
 
             const SizedBox(height: 32),

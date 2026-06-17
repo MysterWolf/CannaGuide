@@ -152,7 +152,10 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
     final parts = <String>[];
     if (_timeOfDay != null) parts.add(_timeOfDay!);
     if (_setting != null) parts.add(_setting!);
-    if (_overallRating != null) parts.add('${'★' * _overallRating!} ${_ratingLabels[_overallRating! - 1]}');
+    if (_overallRating != null) {
+      final r = _overallRating!.clamp(1, _ratingLabels.length);
+      parts.add('${'★' * r} ${_ratingLabels[r - 1]}');
+    }
     final setCount = _effects.values.where((v) => v != null).length;
     if (setCount > 0) parts.add('$setCount effects');
     if (_sideDryMouth) parts.add('Dry Mouth');
@@ -222,7 +225,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
       _method      = _matchChip(session.method, methods.isEmpty ? _methodsByCategory.values.expand((v) => v).toList() : methods);
       _timeOfDay   = _matchChip(session.timeOfDay, _timesOfDay);
       _setting     = _matchChip(session.setting, _settings);
-      _overallRating = session.overallRating;
+      _overallRating = session.overallRating?.clamp(1, 5);
 
       _effects['focus']      = session.effectFocus?.toDouble();
       _effects['sleep']      = session.effectSleep?.toDouble();
@@ -841,7 +844,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
                 ),
               );
             }),
-            if (_overallRating != null) ...[
+            if (_overallRating != null && _overallRating! <= _ratingLabels.length) ...[
               const SizedBox(width: 6),
               Text(
                 _ratingLabels[_overallRating! - 1],

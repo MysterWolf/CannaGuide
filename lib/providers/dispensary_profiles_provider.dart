@@ -6,6 +6,12 @@ class DispensaryProfilesProvider extends ChangeNotifier {
   final Map<String, DispensaryProfile> _cache = {};
 
   DispensaryProfile? profileFor(String dispensaryId) => _cache[dispensaryId];
+  int get profileCount => _cache.length;
+
+  void clearCache() {
+    _cache.clear();
+    notifyListeners();
+  }
 
   Future<DispensaryProfile?> load(String dispensaryId) async {
     final p = await AppDatabase.getDispensaryProfile(dispensaryId);
