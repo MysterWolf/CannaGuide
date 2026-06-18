@@ -308,7 +308,13 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
                     ),
                   ),
 
-                  // ── Curated intelligence (from StashPass) ───────────────────
+                  // ── StashPass origin status (states 1 and 2) ─────────────────
+                  if (s.stashpassStrainId == null || _profile == null || !_profile!.hasContent) ...[
+                    const SizedBox(height: 20),
+                    _StashPassStatusRow(isMatched: s.stashpassStrainId != null),
+                  ],
+
+                  // ── Curated intelligence (from StashPass, state 3) ───────────
                   if (_profile != null && _profile!.hasContent) ...[
                     const SizedBox(height: 24),
                     _StrainProfileSection(profile: _profile!),
@@ -762,6 +768,42 @@ class _CannabinoidRange extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StashPass origin / enrichment status row
+// State 1 (isMatched=false): muted — strain not in StashPass network
+// State 2 (isMatched=true):  purple — matched but curated profile not ready yet
+// State 3: this widget is not shown — the Curated Intelligence card renders instead
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StashPassStatusRow extends StatelessWidget {
+  final bool isMatched;
+  const _StashPassStatusRow({required this.isMatched});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            isMatched ? Icons.auto_awesome_outlined : Icons.radio_button_unchecked,
+            size: 14,
+            color: isMatched ? C.purple : C.muted,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              isMatched
+                  ? 'On the radar — we\'re building out the full profile'
+                  : 'Not yet in the StashPass network',
+              style: TextStyle(
+                color: isMatched ? C.purple : C.muted,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 class _ProfileChip extends StatelessWidget {

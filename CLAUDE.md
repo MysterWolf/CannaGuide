@@ -283,6 +283,11 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ## Changelog
 
+### v1.9.1 — StashPass origin / enrichment status rows (2026-06-18)
+- **Strain detail screen**: 3-state status row added above the Curated Intelligence card. State 1 (no `stashpassStrainId`): muted dot + "Not yet in the StashPass network". State 2 (`stashpassStrainId` set but `_profile == null || !_profile!.hasContent`): purple `Icons.auto_awesome_outlined` + "On the radar — we're building out the full profile". State 3 (`profile.hasContent` true): status row hidden; existing Curated Intelligence card renders as-is. Uses existing `stashpassStrainId` field and `StrainProfile.hasContent` getter — no new data, presentation-layer only.
+- **Dispensary detail screen**: Same 3-state intent, but `DispensaryProfile` has no `hasContent` equivalent. Status row implements states 1 and 2 only, keyed solely on `stashpassOperatorId` presence. Row appears in both render paths: the no-profile card layout and the `_AboutTab` of `_RichProfileScreen`. State 3 is not implemented for dispensaries — no enrichment content check exists to hook into.
+- **`_StashPassStatusRow` widget**: Private single-line `Row` (icon + text) added to both detail screen files. No tap action, no card — informational only. Color tokens: `C.muted` (state 1), `C.purple` (state 2, consistent with AI/intelligence use of purple elsewhere).
+
 ### v1.9.0 — Strain sync + curated intelligence (2026-06-17)
 - **DB version 10**: `stashpass_strain_id TEXT` added to `strains` table; new `strain_profiles` table (UNIQUE on `strain_id`) with 17 columns: aliases, lineage, thc_min/max, cbd_min/max, terpenes (JSON), primary_effects (JSON), use_cases (JSON), flavor_profile (JSON), about, cautions, best_method, beginner_friendly, date_updated
 - **Strain sync**: `_StrainsTabState._refresh()` in `discover_screen.dart` — mirrors dispensary sync. Calls `GET /strains` on StashPass API. Match key: `stashpass_strain_id`. New strains created with `source='stashpass'`. Existing strains: `name` and `strain_type` overwritten from API; all user fields (`brand`, `thcPct`, `cbdPct`, `terpeneProfile`, `notes`, `category`, `dispensaryId`) preserved unconditionally. Sessions untouched.

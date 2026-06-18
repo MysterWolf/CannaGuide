@@ -244,6 +244,8 @@ class _DispensaryDetailScreenState extends State<DispensaryDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  _StashPassStatusRow(isMatched: d.stashpassOperatorId != null),
+                  const SizedBox(height: 16),
                   if (d.staffRating != null || d.vibeRating != null) ...[
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -582,6 +584,8 @@ class _AboutTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
       children: [
+        _StashPassStatusRow(isMatched: dispensary.stashpassOperatorId != null),
+        const SizedBox(height: 20),
         // About
         if (p.about != null && p.about!.isNotEmpty) ...[
           Container(
@@ -1567,6 +1571,39 @@ class _LinkTile extends StatelessWidget {
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
+
+// StashPass origin / enrichment status row
+// State 1 (isMatched=false): muted — dispensary not in StashPass network
+// State 2 (isMatched=true):  purple — matched; no hasContent equivalent exists for
+//   dispensary profiles, so state 3 is not distinguishable here
+class _StashPassStatusRow extends StatelessWidget {
+  final bool isMatched;
+  const _StashPassStatusRow({required this.isMatched});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            isMatched ? Icons.auto_awesome_outlined : Icons.radio_button_unchecked,
+            size: 14,
+            color: isMatched ? C.purple : C.muted,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              isMatched
+                  ? 'On the radar — we\'re building out the full profile'
+                  : 'Not yet in the StashPass network',
+              style: TextStyle(
+                color: isMatched ? C.purple : C.muted,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      );
+}
 
 class _RatingRow extends StatelessWidget {
   final String label;
