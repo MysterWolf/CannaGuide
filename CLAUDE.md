@@ -283,6 +283,13 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ## Changelog
 
+### v1.9.3 — StashPassBadge provenance chip (2026-06-18)
+- **`lib/widgets/stashpass_badge.dart`** — new shared widget; first file in the `lib/widgets/` directory. A minimal chip (icon + "StashPass" label) using `C.accent`/`C.accentLight` as placeholder styling — icon and color pending visual refinement on device.
+- **Strain detail screen**: badge inserted inside the header card column, below the strain type chip, gated on `s.stashpassStrainId != null`.
+- **Dispensary detail screen**: badge inserted in two locations — (1) inside the no-profile header card column, below the venue/tier type chips, gated on `d.stashpassOperatorId != null`; (2) at the top of `_AboutTab` ListView, above `_StashPassStatusRow`, gated on `dispensary.stashpassOperatorId != null`.
+- **Signal split**: badge is provenance-only (visible in states 2 and 3); `_StashPassStatusRow` is progress-only (visible in state 2, suppressed in state 3). The two widgets are independent and do not interact.
+- **Next pass**: list-row and picker badges (not in this commit — detail screens only).
+
 ### v1.9.2 — DispensaryProfile.hasContent + full 3-state dispensary status row (2026-06-18)
 - **`DispensaryProfile.hasContent`** getter added to `lib/db/models/dispensary_profile.dart`. Strict bar: `about != null && about!.isNotEmpty` only. Hours, links, payment methods, brand colors, ownership flags, and specials are explicitly excluded — they are structural/operational fields, not curated intelligence. Mirrors the spirit (not the exact fields) of `StrainProfile.hasContent`.
 - **Dispensary `_StashPassStatusRow` upgraded to full 3-state**: Added `isEnriched` bool param. State 3 (`isEnriched=true`) returns `SizedBox.shrink()` — row suppressed. States 1 and 2 unchanged.
