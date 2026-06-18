@@ -14,6 +14,7 @@ import '../../db/models/dispensary_profile.dart';
 import '../../providers/dispensaries_provider.dart';
 import '../../providers/dispensary_profiles_provider.dart';
 import '../../theme/colors.dart';
+import '../../widgets/stashpass_badge.dart';
 
 // ─── StashPass operator location ──────────────────────────────────────────────
 
@@ -237,6 +238,10 @@ class _DispensaryDetailScreenState extends State<DispensaryDetailScreen> {
                                 _TypeChip(venueLabel),
                                 if (tierLabel != null) ...[const SizedBox(width: 6), _TypeChip(tierLabel)],
                               ]),
+                              if (d.stashpassOperatorId != null) ...[
+                                const SizedBox(height: 4),
+                                const StashPassBadge(),
+                              ],
                             ],
                           ),
                         ),
@@ -584,6 +589,10 @@ class _AboutTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
       children: [
+        if (dispensary.stashpassOperatorId != null) ...[
+          const StashPassBadge(),
+          const SizedBox(height: 12),
+        ],
         _StashPassStatusRow(isMatched: dispensary.stashpassOperatorId != null, isEnriched: profile.hasContent),
         const SizedBox(height: 20),
         // About

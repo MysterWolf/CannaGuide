@@ -8,6 +8,7 @@ import '../../db/models/strain_profile.dart';
 import '../../providers/strain_profiles_provider.dart';
 import '../../providers/strains_provider.dart';
 import '../../theme/colors.dart';
+import '../../widgets/stashpass_badge.dart';
 
 class StrainDetailScreen extends StatefulWidget {
   final String strainId;
@@ -194,6 +195,10 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
                                     style: TextStyle(color: typeColor, fontSize: 12, fontWeight: FontWeight.w600),
                                   ),
                                 ),
+                              if (s.stashpassStrainId != null) ...[
+                                const SizedBox(height: 4),
+                                const StashPassBadge(),
+                              ],
                             ],
                           ),
                         ),
