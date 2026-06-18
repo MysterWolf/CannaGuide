@@ -244,7 +244,7 @@ class _DispensaryDetailScreenState extends State<DispensaryDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  _StashPassStatusRow(isMatched: d.stashpassOperatorId != null),
+                  _StashPassStatusRow(isMatched: d.stashpassOperatorId != null, isEnriched: _profile?.hasContent ?? false),
                   const SizedBox(height: 16),
                   if (d.staffRating != null || d.vibeRating != null) ...[
                     Container(
@@ -584,7 +584,7 @@ class _AboutTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
       children: [
-        _StashPassStatusRow(isMatched: dispensary.stashpassOperatorId != null),
+        _StashPassStatusRow(isMatched: dispensary.stashpassOperatorId != null, isEnriched: profile.hasContent),
         const SizedBox(height: 20),
         // About
         if (p.about != null && p.about!.isNotEmpty) ...[
@@ -1573,36 +1573,40 @@ class _LinkTile extends StatelessWidget {
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 // StashPass origin / enrichment status row
-// State 1 (isMatched=false): muted — dispensary not in StashPass network
-// State 2 (isMatched=true):  purple — matched; no hasContent equivalent exists for
-//   dispensary profiles, so state 3 is not distinguishable here
+// State 1 (isMatched=false):               muted — dispensary not in StashPass network
+// State 2 (isMatched=true, isEnriched=false): purple — matched, profile pending
+// State 3 (isMatched=true, isEnriched=true):  hidden — curated content present
 class _StashPassStatusRow extends StatelessWidget {
   final bool isMatched;
-  const _StashPassStatusRow({required this.isMatched});
+  final bool isEnriched;
+  const _StashPassStatusRow({required this.isMatched, required this.isEnriched});
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(
-            isMatched ? Icons.auto_awesome_outlined : Icons.radio_button_unchecked,
-            size: 14,
-            color: isMatched ? C.purple : C.muted,
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              isMatched
-                  ? 'On the radar — we\'re building out the full profile'
-                  : 'Not yet in the StashPass network',
-              style: TextStyle(
-                color: isMatched ? C.purple : C.muted,
-                fontSize: 12,
-              ),
+  Widget build(BuildContext context) {
+    if (isEnriched) return const SizedBox.shrink();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(
+          isMatched ? Icons.auto_awesome_outlined : Icons.radio_button_unchecked,
+          size: 14,
+          color: isMatched ? C.purple : C.muted,
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            isMatched
+                ? 'On the radar — we\'re building out the full profile'
+                : 'Not yet in the StashPass network',
+            style: TextStyle(
+              color: isMatched ? C.purple : C.muted,
+              fontSize: 12,
             ),
           ),
-        ],
-      );
+        ),
+      ],
+    );
+  }
 }
 
 class _RatingRow extends StatelessWidget {

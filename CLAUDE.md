@@ -283,9 +283,15 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ## Changelog
 
+### v1.9.2 — DispensaryProfile.hasContent + full 3-state dispensary status row (2026-06-18)
+- **`DispensaryProfile.hasContent`** getter added to `lib/db/models/dispensary_profile.dart`. Strict bar: `about != null && about!.isNotEmpty` only. Hours, links, payment methods, brand colors, ownership flags, and specials are explicitly excluded — they are structural/operational fields, not curated intelligence. Mirrors the spirit (not the exact fields) of `StrainProfile.hasContent`.
+- **Dispensary `_StashPassStatusRow` upgraded to full 3-state**: Added `isEnriched` bool param. State 3 (`isEnriched=true`) returns `SizedBox.shrink()` — row suppressed. States 1 and 2 unchanged.
+- **Call sites updated** — no-profile card path: `isEnriched: _profile?.hasContent ?? false` (always false when profile is null, correct). `_AboutTab` path: `isEnriched: profile.hasContent`.
+- **Rich-profile rendering gate unchanged**: `_profile != null` still controls when `_RichProfileScreen` renders. Operational profile data (hours, brand colors, links) continues to show for any matched operator regardless of narrative content — intentional.
+
 ### v1.9.1 — StashPass origin / enrichment status rows (2026-06-18)
 - **Strain detail screen**: 3-state status row added above the Curated Intelligence card. State 1 (no `stashpassStrainId`): muted dot + "Not yet in the StashPass network". State 2 (`stashpassStrainId` set but `_profile == null || !_profile!.hasContent`): purple `Icons.auto_awesome_outlined` + "On the radar — we're building out the full profile". State 3 (`profile.hasContent` true): status row hidden; existing Curated Intelligence card renders as-is. Uses existing `stashpassStrainId` field and `StrainProfile.hasContent` getter — no new data, presentation-layer only.
-- **Dispensary detail screen**: Same 3-state intent, but `DispensaryProfile` has no `hasContent` equivalent. Status row implements states 1 and 2 only, keyed solely on `stashpassOperatorId` presence. Row appears in both render paths: the no-profile card layout and the `_AboutTab` of `_RichProfileScreen`. State 3 is not implemented for dispensaries — no enrichment content check exists to hook into.
+- **Dispensary detail screen**: Same 3-state intent, but `DispensaryProfile` had no `hasContent` equivalent at time of v1.9.1. Status row implemented states 1 and 2 only. State 3 added in v1.9.2.
 - **`_StashPassStatusRow` widget**: Private single-line `Row` (icon + text) added to both detail screen files. No tap action, no card — informational only. Color tokens: `C.muted` (state 1), `C.purple` (state 2, consistent with AI/intelligence use of purple elsewhere).
 
 ### v1.9.0 — Strain sync + curated intelligence (2026-06-17)

@@ -78,6 +78,10 @@ class DispensaryProfile {
       (dutchieUrl?.isNotEmpty ?? false) ||
       (otherOrderingUrl?.isNotEmpty ?? false);
 
+  // True only when curated narrative content exists. Mirrors the intent of
+  // StrainProfile.hasContent — structural fields (hours, colors, links) do not count.
+  bool get hasContent => about != null && about!.isNotEmpty;
+
   factory DispensaryProfile.fromMap(Map<String, dynamic> m) => DispensaryProfile(
         id: m['id'] as String,
         dispensaryId: m['dispensary_id'] as String,
