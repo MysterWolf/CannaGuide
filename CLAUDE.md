@@ -265,6 +265,24 @@ Flutter is at `/home/mysterwolf/flutter/bin/flutter` — not in PATH by default.
 
 ---
 
+## CI / Debug APK
+
+`.github/workflows/debug-apk.yml` runs on every push to `master`:
+- Builds `app-debug.apk` with Flutter 3.41.9 on `ubuntu-latest`
+- Deletes and recreates the `debug-latest` pre-release tag
+- Uploads the APK as `cannaguide-debug.apk`
+
+**Stable download URL (never changes):**
+```
+https://github.com/MysterWolf/CannaGuide/releases/download/debug-latest/cannaguide-debug.apk
+```
+
+**QR code** for the above URL: `~/Downloads/CannaGuide/cannaguide-debug-qr.png`
+
+Actions log: `https://github.com/MysterWolf/CannaGuide/actions`
+
+---
+
 ## Do Not Build
 
 - **Standalone THC Beverages page** — it is a category in the product browser, not a tab
@@ -282,6 +300,16 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 ---
 
 ## Changelog
+
+### v1.9.4 — Fix strain profile sync (2026-06-21)
+
+Three bugs in `discover_screen.dart` (`_StrainsTabState._refresh()` + `_strainProfileFromApi()`) that caused strain profiles to never write to local SQLite:
+
+1. **`st['profile']` key never existed** — API returns flat objects; all fields are top-level on each strain. Was: `final rawProfile = st['profile']`; fixed by passing `st` directly to `_strainProfileFromApi()` and removing the null-guard that always skipped the save.
+2. **`st['strain_type']` → `st['type']`** — API `Strain` interface uses `type`, not `strain_type`. Affected both the new-strain and existing-strain code paths; strain type was always null from API.
+3. **`p['primary_effects']` → `p['effects']`** and **`p['flavor_profile']` → `p['flavors']`** — field name mismatches between `_strainProfileFromApi()` mapper and the actual API response shape.
+
+After this fix, pull-to-refresh on the Strains tab writes real `StrainProfile` rows to `strain_profiles` table — terpenes, effects, flavors, about, cannabinoid ranges, lineage, use cases all sync. `_StrainProfileSection` "Curated Intelligence" card was already built and begins rendering immediately once data lands.
 
 ### v1.9.3 — StashPassBadge provenance chip (2026-06-18)
 - **`lib/widgets/stashpass_badge.dart`** — new shared widget; first file in the `lib/widgets/` directory. A minimal chip (icon + "StashPass" label) using `C.accent`/`C.accentLight` as placeholder styling — icon and color pending visual refinement on device.
