@@ -157,7 +157,7 @@ class _StrainsTabState extends State<_StrainsTab> {
           strain = Strain(
             id: const Uuid().v4(),
             name: st['name'] as String? ?? 'Unknown',
-            strainType: st['strain_type'] as String?,
+            strainType: st['type'] as String?,
             stashpassStrainId: stId,
             source: 'stashpass',
           );
@@ -167,7 +167,7 @@ class _StrainsTabState extends State<_StrainsTab> {
           final updated = Strain(
             id: strain.id,
             name: st['name'] as String? ?? strain.name,
-            strainType: st['strain_type'] as String? ?? strain.strainType,
+            strainType: st['type'] as String? ?? strain.strainType,
             brand: strain.brand,
             thcPct: strain.thcPct,
             cbdPct: strain.cbdPct,
@@ -186,9 +186,7 @@ class _StrainsTabState extends State<_StrainsTab> {
           strain = updated;
         }
 
-        final rawProfile = st['profile'] as Map<String, dynamic>?;
-        if (rawProfile == null) continue;
-        await profilesProvider.save(_strainProfileFromApi(strain.id, rawProfile));
+        await profilesProvider.save(_strainProfileFromApi(strain.id, st));
       }
     } catch (_) {
       // Network or DB error — fall through to reload cached data
@@ -211,9 +209,9 @@ class _StrainsTabState extends State<_StrainsTab> {
       cbdMin: _parseDouble(p['cbd_min']),
       cbdMax: _parseDouble(p['cbd_max']),
       terpenes: _encodeList(p['terpenes']),
-      primaryEffects: _encodeList(p['primary_effects']),
+      primaryEffects: _encodeList(p['effects']),
       useCases: _encodeList(p['use_cases']),
-      flavorProfile: _encodeList(p['flavor_profile']),
+      flavorProfile: _encodeList(p['flavors']),
       about: p['about'] as String?,
       cautions: p['cautions'] as String?,
       bestMethod: p['best_method'] as String?,
