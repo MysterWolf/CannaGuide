@@ -1,0 +1,41 @@
+name: Debug APK
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter build apk --debug
+
+      - name: Publish debug-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete debug-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create debug-latest \
+            --title "Debug Latest ($(git rev-parse --short HEAD))" \
+            --notes "Debug build · commit $(git rev-parse --short HEAD) · $(date -u '+%Y-%m-%d %H:%M UTC')" \
+            --prerelease \
+            build/app/outputs/flutter-apk/app-debug.apk#cannaguide-debug.apk
