@@ -216,15 +216,21 @@ Display name and avatar are owned by `CirclesProvider.profile` — Settings scre
 
 ### Strain Sync
 
-`_StrainsTabState._refresh()` in `discover_screen.dart` runs on pull-to-refresh and once on app launch:
+`_StrainsTabState._refresh()` in `discover_screen.dart` runs on pull-to-refresh and once on app launch.
+
+3-step merge logic (v1.9.5+):
 1. Clears `StrainProfilesProvider` in-memory cache
-2. Calls `GET /strains` on the StashPass API
-3. Builds a lookup map of local strains keyed by `stashpassStrainId`
-4. For each API strain:
-   - **New strain** (not in local DB): creates a `Strain` record via `provider.add()` with `source = 'stashpass'`
-   - **Existing strain** (matched by `stashpassStrainId`): updates `name` and `strainType` via `provider.update()`. User fields (`brand`, `thcPct`, `cbdPct`, `terpeneProfile`, `notes`, `category`, `dispensaryId`) are preserved unconditionally.
-   - Upserts the strain's curated profile into `StrainProfilesProvider`
+2. Calls `GET /strains`, snapshots local strains once before loop
+3. For each API strain:
+   - **Step 1 — linked row** (`stashpassStrainId` match): updates `name`/`strainType` from API only; all user fields (`brand`, `notes`, `category`, `dispensaryId`, `rating`, `sessions`, `createdAt`) left untouched. Counts as changed if name or type actually differed.
+   - **Step 2 — no linked row**: attempts fuzzy match on unlinked local rows (`stashpassStrainId IS NULL`). Normalize: lowercase + strip punctuation + collapse whitespace; require exact normalized name AND exact type. Match → set `stashpassStrainId`, merge API fields, leave user fields. Each local row can only be claimed once per refresh cycle (`fuzzyClaimedIds` guard). No match → INSERT new row with `source='stashpass'`.
+   - Upserts curated profile into `StrainProfilesProvider`
+4. Shows "X strains updated from StashPass" toast if any rows changed or were newly linked
 5. Reloads strain list from DB
+
+**Merge rules** (enforced strictly):
+- API owns: `name`, `strainType`, `stashpassStrainId`
+- User owns (never overwrite): `brand`, `notes`, `category`, `dispensaryId`, `thcPct`, `cbdPct`, `terpeneProfile`, `cannabinoidProfile`, `description`, `source`, `sourceType`, `createdAt`
 
 Profile data goes into `strain_profiles` table (keyed UNIQUE on `strain_id`). On `StrainDetailScreen`, when a profile exists, a "Curated Intelligence" section is shown with terpenes, effects, flavors, use cases, cannabinoid ranges, cautions, and best method.
 
@@ -300,6 +306,14 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 ---
 
 ## Changelog
+
+### v1.9.5 — Strain merge-on-refresh + stashpassStrainId drop fix (2026-06-22)
+
+Two data integrity fixes shipped together:
+
+1. **`add_strain_screen.dart` `_save()` drop bug**: `Strain` constructor was missing `stashpassStrainId: _existing?.stashpassStrainId`. Every edit to a strain silently cleared the field, making the next sync treat it as unlinked and create a duplicate row.
+
+2. **`discover_screen.dart` `_refresh()` merge logic**: Replaced the naive insert/update loop with a 3-step strategy — (1) linked-row merge by `stashpassStrainId`, (2) one-time fuzzy match for previously unlinked local strains (exact normalized name + exact type; each local row claimable only once per cycle), (3) insert new row only when no match. Toast "X strains updated from StashPass" when rows change. See Strain Sync section above for full logic.
 
 ### v1.9.4 — Fix strain profile sync (2026-06-21)
 
