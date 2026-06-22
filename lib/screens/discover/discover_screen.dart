@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../config.dart';
+import '../../services/device_id_service.dart';
 import '../../db/models/dispensary.dart';
 import '../../db/models/dispensary_profile.dart';
 import '../../db/models/strain.dart';
@@ -134,7 +135,7 @@ class _StrainsTabState extends State<_StrainsTab> {
 
     try {
       final res = await http
-          .get(Uri.parse('$kCirclesApiBase/strains'))
+          .get(Uri.parse('$kCirclesApiBase/strains?device_id=${DeviceIdService.deviceId}'))
           .timeout(const Duration(seconds: 15));
       if (res.statusCode != 200 || !mounted) return;
 

@@ -11,6 +11,7 @@ import 'providers/settings_provider.dart';
 import 'providers/strain_profiles_provider.dart';
 import 'providers/strains_provider.dart';
 import 'app.dart';
+import 'services/device_id_service.dart';
 import 'services/notification_service.dart';
 
 void main() async {
@@ -24,6 +25,7 @@ void main() async {
   // Pre-open DB — copies backup from assets on first launch
   await AppDatabase.db;
   await NotificationService.init();
+  await DeviceIdService.init();
 
   runApp(
     MultiProvider(

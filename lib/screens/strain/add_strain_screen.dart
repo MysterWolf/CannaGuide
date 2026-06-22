@@ -1,13 +1,18 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../config.dart';
 import '../../db/database.dart';
 import '../../db/models/dispensary.dart';
 import '../../db/models/strain.dart';
 import '../../providers/dispensaries_provider.dart';
 import '../../providers/strains_provider.dart';
+import '../../services/device_id_service.dart';
 import '../../theme/colors.dart';
 
 const _uuid = Uuid();
@@ -118,8 +123,49 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
       await context.read<StrainsProvider>().update(strain);
     } else {
       await context.read<StrainsProvider>().add(strain);
+      if (strain.stashpassStrainId == null && mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        final provider   = context.read<StrainsProvider>();
+        _queueSubmit(strain, messenger, provider);
+      }
     }
     if (mounted) context.pop();
+  }
+
+  void _queueSubmit(
+    Strain strain,
+    ScaffoldMessengerState messenger,
+    StrainsProvider provider,
+  ) {
+    Future.microtask(() async {
+      try {
+        final res = await http
+            .post(
+              Uri.parse('$kCirclesApiBase/queue/strains'),
+              headers: const {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'name': strain.name,
+                'type': strain.strainType,
+                'device_id': DeviceIdService.deviceId,
+              }),
+            )
+            .timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          if (data['status'] == 'exists') {
+            final sid = data['strain_id'] as String?;
+            if (sid != null) {
+              await provider.update(strain.copyWith(stashpassStrainId: sid));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Matched to StashPass database')),
+              );
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[Queue] Submit failed: $e');
+      }
+    });
   }
 
   void _pickDispensary() async {

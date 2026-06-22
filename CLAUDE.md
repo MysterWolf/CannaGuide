@@ -15,7 +15,7 @@ and tracking effects supports that goal; it is not the goal itself. Every featur
 should ask: *does this teach the user something?* Tracker features that don't teach do not
 belong in this app.
 
-**Current version:** 1.9.0+1  
+**Current version:** 1.9.8+1  
 **Package:** `com.mysterwolf.cannaguide`  
 **Repo:** https://github.com/MysterWolf/CannaGuide (branch: master)  
 **APK output:** `build/app/outputs/flutter-apk/app-release.apk`
@@ -306,6 +306,17 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 ---
 
 ## Changelog
+
+### v1.9.8 — StashPass strain discovery queue client (2026-06-22)
+
+**DeviceIdService** (`lib/services/device_id_service.dart`): static service that generates and persists an anonymous UUID device identity on first launch. Key: `stashpass_device_id` in SharedPreferences. Initialized with `await DeviceIdService.init()` in `main.dart` before `runApp()`, after DB and NotificationService. Static `deviceId` getter available anywhere after init.
+
+**Queue submission on new strain save** (`lib/screens/strain/add_strain_screen.dart`): after `StrainsProvider.add()` succeeds for new strains with no `stashpassStrainId`, fires `_queueSubmit()` as a `Future.microtask` (non-blocking). Posts `{ name, type, device_id }` to `POST /queue/strains`. Handles response:
+- `status: 'exists'` → calls `provider.update(strain.copyWith(stashpassStrainId: sid))` to link the local row; shows SnackBar "Matched to StashPass database"
+- `status: 'queued'` → silent, no UI change
+- Network failure/timeout → silent, `debugPrint` only. Local save is never blocked.
+
+**device_id on sync** (`lib/screens/discover/discover_screen.dart`): `GET /strains` call now passes `?device_id=${DeviceIdService.deviceId}`. Server accepts and ignores it for now (no per-device scoping table yet); presence enables future logging/analytics without a client change.
 
 ### v1.9.7 — Dominance field (2026-06-22)
 
