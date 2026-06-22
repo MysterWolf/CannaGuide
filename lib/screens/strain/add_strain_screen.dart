@@ -111,6 +111,7 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
       category: _category,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       dispensaryId: _dispensary?.id,
+      stashpassStrainId: _existing?.stashpassStrainId,
     );
 
     if (widget.isEditing) {

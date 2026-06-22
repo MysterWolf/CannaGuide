@@ -141,33 +141,38 @@ class _StrainsTabState extends State<_StrainsTab> {
       final apiStrains = (data['strains'] as List?) ?? [];
 
       final strainsProvider = context.read<StrainsProvider>();
+
+      // Snapshot local strains once; the provider reloads inside add/update
+      // but we work off this snapshot to keep the loop deterministic.
+      final allLocal = List<Strain>.from(strainsProvider.strains);
       final byStashpassId = <String, Strain>{
-        for (final s in strainsProvider.strains)
+        for (final s in allLocal)
           if (s.stashpassStrainId != null) s.stashpassStrainId!: s,
       };
+      final unlinked =
+          allLocal.where((s) => s.stashpassStrainId == null).toList();
+      final fuzzyClaimedIds = <String>{}; // local IDs linked this cycle
+      int toastCount = 0;
 
       final profilesProvider = context.read<StrainProfilesProvider>();
       for (final st in apiStrains) {
         final stId = st['id'] as String?;
         if (stId == null) continue;
 
+        final apiName = (st['name'] as String?) ?? '';
+        final apiType = (st['type'] as String?) ?? '';
+
         Strain? strain = byStashpassId[stId];
-        if (strain == null) {
-          // New strain — create local record
-          strain = Strain(
-            id: const Uuid().v4(),
-            name: st['name'] as String? ?? 'Unknown',
-            strainType: st['type'] as String?,
-            stashpassStrainId: stId,
-            source: 'stashpass',
-          );
-          await strainsProvider.add(strain);
-        } else {
-          // Existing — update API-sourced fields; preserve user data
+
+        if (strain != null) {
+          // STEP 1: linked row found — merge API-owned fields, leave user data untouched
+          final newName = apiName.isNotEmpty ? apiName : strain.name;
+          final newType = apiType.isNotEmpty ? apiType : strain.strainType;
+          final changed = newName != strain.name || newType != strain.strainType;
           final updated = Strain(
             id: strain.id,
-            name: st['name'] as String? ?? strain.name,
-            strainType: st['type'] as String? ?? strain.strainType,
+            name: newName,
+            strainType: newType,
             brand: strain.brand,
             thcPct: strain.thcPct,
             cbdPct: strain.cbdPct,
@@ -184,9 +189,70 @@ class _StrainsTabState extends State<_StrainsTab> {
           );
           await strainsProvider.update(updated);
           strain = updated;
+          if (changed) toastCount++;
+        } else {
+          // STEP 2: no linked row — attempt one-time fuzzy match on unlinked rows.
+          // Normalize: lowercase + trim + strip punctuation. Exact match only.
+          final normalizedApiName = _normalizeName(apiName);
+          Strain? matchedLocal;
+          for (final s in unlinked) {
+            if (!fuzzyClaimedIds.contains(s.id) &&
+                _normalizeName(s.name) == normalizedApiName &&
+                (s.strainType ?? '').toLowerCase() ==
+                    apiType.toLowerCase()) {
+              matchedLocal = s;
+              break;
+            }
+          }
+
+          if (matchedLocal != null) {
+            // Fuzzy match found — establish link and merge
+            fuzzyClaimedIds.add(matchedLocal.id);
+            toastCount++;
+            final linked = Strain(
+              id: matchedLocal.id,
+              name: apiName.isNotEmpty ? apiName : matchedLocal.name,
+              strainType:
+                  apiType.isNotEmpty ? apiType : matchedLocal.strainType,
+              brand: matchedLocal.brand,
+              thcPct: matchedLocal.thcPct,
+              cbdPct: matchedLocal.cbdPct,
+              terpeneProfile: matchedLocal.terpeneProfile,
+              cannabinoidProfile: matchedLocal.cannabinoidProfile,
+              description: matchedLocal.description,
+              source: matchedLocal.source,
+              sourceType: matchedLocal.sourceType,
+              createdAt: matchedLocal.createdAt,
+              category: matchedLocal.category,
+              notes: matchedLocal.notes,
+              dispensaryId: matchedLocal.dispensaryId,
+              stashpassStrainId: stId,
+            );
+            await strainsProvider.update(linked);
+            strain = linked;
+          } else {
+            // No local match — insert new row; user-owned fields start null/empty
+            strain = Strain(
+              id: const Uuid().v4(),
+              name: apiName.isNotEmpty ? apiName : 'Unknown',
+              strainType: apiType.isNotEmpty ? apiType : null,
+              stashpassStrainId: stId,
+              source: 'stashpass',
+            );
+            await strainsProvider.add(strain);
+          }
         }
 
         await profilesProvider.save(_strainProfileFromApi(strain.id, st));
+      }
+
+      // STEP 3: toast if anything actually changed
+      if (mounted && toastCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '$toastCount strain${toastCount == 1 ? '' : 's'} updated from StashPass'),
+          duration: const Duration(seconds: 2),
+        ));
       }
     } catch (_) {
       // Network or DB error — fall through to reload cached data
@@ -194,6 +260,13 @@ class _StrainsTabState extends State<_StrainsTab> {
 
     if (mounted) await context.read<StrainsProvider>().load();
   }
+
+  // Normalize a strain name for fuzzy matching: lowercase, strip punctuation, collapse spaces.
+  static String _normalizeName(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 
   StrainProfile _strainProfileFromApi(String strainId, Map<String, dynamic> p) {
     String? _encodeList(dynamic v) =>
