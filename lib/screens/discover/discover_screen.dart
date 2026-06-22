@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
@@ -198,8 +199,7 @@ class _StrainsTabState extends State<_StrainsTab> {
           for (final s in unlinked) {
             if (!fuzzyClaimedIds.contains(s.id) &&
                 _normalizeName(s.name) == normalizedApiName &&
-                (s.strainType ?? '').toLowerCase() ==
-                    apiType.toLowerCase()) {
+                _typeCompatible(s.strainType ?? '', apiType)) {
               matchedLocal = s;
               break;
             }
@@ -267,6 +267,61 @@ class _StrainsTabState extends State<_StrainsTab> {
       .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+
+  // Genetic-type compatibility for fuzzy matching.
+  //
+  // Groups:
+  //   Sativa group : sativa, sativa-dominant hybrid
+  //   Indica group : indica, indica-dominant hybrid
+  //   Hybrid group : hybrid, balanced hybrid, sativa-dominant hybrid,
+  //                  indica-dominant hybrid
+  //
+  // Compatible = share at least one group. Unknown values (e.g. "flower" from
+  // migrated RN data stored in strainType) are treated as don't-care — allow
+  // the name match to be sufficient rather than creating a duplicate.
+  static bool _typeCompatible(String a, String b) {
+    final na = a.toLowerCase().replaceAll(RegExp(r'[-_]+'), ' ').trim();
+    final nb = b.toLowerCase().replaceAll(RegExp(r'[-_]+'), ' ').trim();
+
+    if (na == nb) return true;
+
+    const sativaGroup = {'sativa', 'sativa dominant hybrid'};
+    const indicaGroup = {'indica', 'indica dominant hybrid'};
+    const hybridGroup = {
+      'hybrid',
+      'balanced hybrid',
+      'sativa dominant hybrid',
+      'indica dominant hybrid',
+    };
+
+    // Unknown type (product format or empty) — allow match on name alone
+    final allKnown = {...sativaGroup, ...indicaGroup, ...hybridGroup};
+    if (!allKnown.contains(na) || !allKnown.contains(nb)) return true;
+
+    // Sativa ↔ Indica (no hybrid qualifier on either side) — incompatible
+    if (sativaGroup.contains(na) && indicaGroup.contains(nb)) return false;
+    if (indicaGroup.contains(na) && sativaGroup.contains(nb)) return false;
+
+    // Sativa/Indica ↔ plain Hybrid (no dominance qualifier) — ambiguous,
+    // still allow but emit a debug log so mismatches are surfaced in testing.
+    final aIsLeaf = na == 'sativa' || na == 'indica';
+    final bIsLeaf = nb == 'sativa' || nb == 'indica';
+    final aIsPlainHybrid = na == 'hybrid' || na == 'balanced hybrid';
+    final bIsPlainHybrid = nb == 'hybrid' || nb == 'balanced hybrid';
+    if ((aIsLeaf && bIsPlainHybrid) || (bIsLeaf && aIsPlainHybrid)) {
+      if (kDebugMode) {
+        debugPrint('[CannaGuide] fuzzy type ambiguous — matched on name only ($na ↔ $nb)');
+      }
+      return true;
+    }
+
+    // Compatible if they share at least one recognized group
+    if (sativaGroup.contains(na) && sativaGroup.contains(nb)) return true;
+    if (indicaGroup.contains(na) && indicaGroup.contains(nb)) return true;
+    if (hybridGroup.contains(na) && hybridGroup.contains(nb)) return true;
+
+    return false;
+  }
 
   StrainProfile _strainProfileFromApi(String strainId, Map<String, dynamic> p) {
     String? _encodeList(dynamic v) =>
