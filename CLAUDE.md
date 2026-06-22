@@ -152,7 +152,7 @@ C.white       #FFFFFF
 
 ## Database (`lib/db/database.dart`)
 
-sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **10**.
+sqflite. DB file: `cannaguide.db` in `getDatabasesPath()`. Current version: **11**.
 
 **First-launch migration:** On first launch (db file absent), `AppDatabase._open()` copies `assets/cannaguide_backup.db` to the database path before `openDatabase`. This preserved 10 strains, 10 sessions, 3 dispensaries from the RN version.
 
@@ -306,6 +306,19 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 ---
 
 ## Changelog
+
+### v1.9.7 — Dominance field (2026-06-22)
+
+**DB version 11:** `dominance TEXT` column added to `strains` table in `_onCreate` and `_onUpgrade < 11`.
+
+**Strain model:** `dominance` field in constructor, `fromMap`, `toMap`, `copyWith`.
+
+**Sync (discover_screen.dart):** API `st['dominance']` propagated in all three Strain constructors — STEP 1 (linked row: `apiDominance ?? strain.dominance`), STEP 2 fuzzy match (`apiDominance ?? matchedLocal.dominance`), STEP 2 new row (`apiDominance`). Included in `changed` check for STEP 1.
+
+**Display (strain_detail_screen.dart):**
+- Muted secondary text below type chip (chip area) — renders only when `dominance != null`
+- `_StrainProfileSection` now accepts optional `strain: Strain?` param; "Genetic Lean" row renders when `strain?.dominance != null`
+- `_dominanceLabel()` helper maps enum values: `true_sativa`→"True Sativa", `sativa_dominant`→"Sativa-dominant", `balanced`→"Balanced Hybrid", `indica_dominant`→"Indica-dominant", `true_indica`→"True Indica"
 
 ### v1.9.6 — Type-compatible fuzzy match for strain dedup (2026-06-22)
 
