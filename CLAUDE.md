@@ -307,6 +307,20 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ## Changelog
 
+### v1.9.6 — Type-compatible fuzzy match for strain dedup (2026-06-22)
+
+**Fix 3 — Field audit, discover_screen.dart fuzzy match:**
+The right field (`s.strainType`) was already being compared against the API's `type`. Root cause of confirmed duplicate: old migrated RN data stored product format ("Flower") in `strainType`. Exact match `'flower' != 'hybrid'` blocked the fuzzy link → duplicate inserted.
+
+**Fix 4 — `_typeCompatible(String a, String b)` helper:**
+Replaces exact type equality in the fuzzy match block. Compatibility rules:
+- Sativa ↔ Sativa-dominant Hybrid ✓
+- Indica ↔ Indica-dominant Hybrid ✓
+- Hybrid ↔ Sativa-dominant Hybrid, Indica-dominant Hybrid, Balanced Hybrid ✓
+- Sativa ↔ Indica ✗
+- Sativa/Indica ↔ plain Hybrid (no qualifier): edge case — allow + `debugPrint` log
+- Unknown value (e.g. "Flower" from migrated data): treated as don't-care, name match sufficient
+
 ### v1.9.5 — Strain merge-on-refresh + stashpassStrainId drop fix (2026-06-22)
 
 Two data integrity fixes shipped together:
