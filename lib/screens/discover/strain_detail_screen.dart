@@ -195,6 +195,13 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
                                     style: TextStyle(color: typeColor, fontSize: 12, fontWeight: FontWeight.w600),
                                   ),
                                 ),
+                              if (s.dominance != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  _dominanceLabel(s.dominance!),
+                                  style: const TextStyle(color: C.muted, fontSize: 11),
+                                ),
+                              ],
                               if (s.stashpassStrainId != null) ...[
                                 const SizedBox(height: 4),
                                 const StashPassBadge(),
@@ -322,7 +329,7 @@ class _StrainDetailScreenState extends State<StrainDetailScreen> {
                   // ── Curated intelligence (from StashPass, state 3) ───────────
                   if (_profile != null && _profile!.hasContent) ...[
                     const SizedBox(height: 24),
-                    _StrainProfileSection(profile: _profile!),
+                    _StrainProfileSection(profile: _profile!, strain: _strain),
                   ],
 
                   const SizedBox(height: 24),
@@ -488,13 +495,23 @@ class _SessionMiniCard extends StatelessWidget {
   }
 }
 
+String _dominanceLabel(String d) => switch (d) {
+  'true_sativa'     => 'True Sativa',
+  'sativa_dominant' => 'Sativa-dominant',
+  'balanced'        => 'Balanced Hybrid',
+  'indica_dominant' => 'Indica-dominant',
+  'true_indica'     => 'True Indica',
+  _                 => d,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Curated intelligence section — populated from StashPass strain profile
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StrainProfileSection extends StatelessWidget {
   final StrainProfile profile;
-  const _StrainProfileSection({required this.profile});
+  final Strain? strain;
+  const _StrainProfileSection({required this.profile, this.strain});
 
   @override
   Widget build(BuildContext context) {
@@ -546,6 +563,18 @@ class _StrainProfileSection extends StatelessWidget {
               ],
             ],
           ),
+
+          // Genetic lean (dominance)
+          if (strain?.dominance != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('Genetic Lean  ', style: TextStyle(color: C.muted, fontSize: 12)),
+                Text(_dominanceLabel(strain!.dominance!),
+                    style: const TextStyle(color: C.text, fontSize: 12)),
+              ],
+            ),
+          ],
 
           // Lineage + best method
           if (profile.lineage != null || profile.bestMethod != null) ...[

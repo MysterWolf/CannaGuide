@@ -16,6 +16,7 @@ class Strain {
   final String? notes;
   final String? dispensaryId;
   final String? stashpassStrainId;
+  final String? dominance;
 
   const Strain({
     required this.id,
@@ -35,6 +36,7 @@ class Strain {
     this.notes,
     this.dispensaryId,
     this.stashpassStrainId,
+    this.dominance,
   });
 
   Strain copyWith({
@@ -49,6 +51,7 @@ class Strain {
     String? notes,
     String? dispensaryId,
     String? stashpassStrainId,
+    String? dominance,
     String? updatedAt,
     bool clearBrand = false,
     bool clearNotes = false,
@@ -71,6 +74,7 @@ class Strain {
     notes: clearNotes ? null : (notes ?? this.notes),
     dispensaryId: clearDispensaryId ? null : (dispensaryId ?? this.dispensaryId),
     stashpassStrainId: stashpassStrainId ?? this.stashpassStrainId,
+    dominance: dominance ?? this.dominance,
   );
 
   factory Strain.fromMap(Map<String, dynamic> m) => Strain(
@@ -91,6 +95,7 @@ class Strain {
         notes: m['notes'] as String?,
         dispensaryId: m['dispensary_id'] as String?,
         stashpassStrainId: m['stashpass_strain_id'] as String?,
+        dominance: m['dominance'] as String?,
       );
 
   static double? _parseDouble(Object? v) =>
@@ -114,5 +119,6 @@ class Strain {
         'notes': notes,
         'dispensary_id': dispensaryId,
         'stashpass_strain_id': stashpassStrainId,
+        'dominance': dominance,
       };
 }

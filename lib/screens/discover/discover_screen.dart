@@ -162,6 +162,7 @@ class _StrainsTabState extends State<_StrainsTab> {
 
         final apiName = (st['name'] as String?) ?? '';
         final apiType = (st['type'] as String?) ?? '';
+        final apiDominance = st['dominance'] as String?;
 
         Strain? strain = byStashpassId[stId];
 
@@ -169,11 +170,14 @@ class _StrainsTabState extends State<_StrainsTab> {
           // STEP 1: linked row found — merge API-owned fields, leave user data untouched
           final newName = apiName.isNotEmpty ? apiName : strain.name;
           final newType = apiType.isNotEmpty ? apiType : strain.strainType;
-          final changed = newName != strain.name || newType != strain.strainType;
+          final newDominance = apiDominance ?? strain.dominance;
+          final changed = newName != strain.name || newType != strain.strainType ||
+              (apiDominance != null && apiDominance != strain.dominance);
           final updated = Strain(
             id: strain.id,
             name: newName,
             strainType: newType,
+            dominance: newDominance,
             brand: strain.brand,
             thcPct: strain.thcPct,
             cbdPct: strain.cbdPct,
@@ -214,6 +218,7 @@ class _StrainsTabState extends State<_StrainsTab> {
               name: apiName.isNotEmpty ? apiName : matchedLocal.name,
               strainType:
                   apiType.isNotEmpty ? apiType : matchedLocal.strainType,
+              dominance: apiDominance ?? matchedLocal.dominance,
               brand: matchedLocal.brand,
               thcPct: matchedLocal.thcPct,
               cbdPct: matchedLocal.cbdPct,
@@ -236,6 +241,7 @@ class _StrainsTabState extends State<_StrainsTab> {
               id: const Uuid().v4(),
               name: apiName.isNotEmpty ? apiName : 'Unknown',
               strainType: apiType.isNotEmpty ? apiType : null,
+              dominance: apiDominance,
               stashpassStrainId: stId,
               source: 'stashpass',
             );

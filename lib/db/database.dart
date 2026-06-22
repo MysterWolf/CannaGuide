@@ -11,7 +11,7 @@ import 'models/strain_profile.dart';
 
 class AppDatabase {
   static const _dbName = 'cannaguide.db';
-  static const _dbVersion = 10;
+  static const _dbVersion = 11;
 
   static Database? _db;
 
@@ -80,7 +80,8 @@ class AppDatabase {
         category TEXT,
         notes TEXT,
         dispensary_id TEXT,
-        stashpass_strain_id TEXT
+        stashpass_strain_id TEXT,
+        dominance TEXT
       )''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_strains_name ON strains(name)');
 
@@ -535,6 +536,9 @@ class AppDatabase {
           beginner_friendly INTEGER DEFAULT 0,
           date_updated INTEGER
         )''');
+    }
+    if (oldVersion < 11) {
+      try { await db.execute('ALTER TABLE strains ADD COLUMN dominance TEXT'); } catch (_) {}
     }
   }
 
