@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../config.dart';
 import '../../db/database.dart';
 import '../../db/models/dispensary.dart';
 import '../../db/models/session.dart';
@@ -10,6 +14,7 @@ import '../../db/models/strain.dart';
 import '../../providers/dispensaries_provider.dart';
 import '../../providers/sessions_provider.dart';
 import '../../providers/strains_provider.dart';
+import '../../services/device_id_service.dart';
 import '../../theme/colors.dart';
 
 const _uuid = Uuid();
@@ -290,6 +295,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
   Future<void> _save() async {
     setState(() => _saving = true);
 
+    Strain? resolvedStrain;
     String? strainId;
     final strainName = _strainNameCtrl.text.trim();
     if (strainName.isNotEmpty) {
@@ -300,6 +306,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
       );
       if (existing != null) {
         strainId = existing.id;
+        resolvedStrain = existing;
       } else {
         final newStrain = Strain(
           id: _uuid.v4(),
@@ -310,6 +317,7 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
         );
         await context.read<StrainsProvider>().add(newStrain);
         strainId = newStrain.id;
+        resolvedStrain = newStrain;
       }
     }
 
@@ -354,7 +362,53 @@ class _LogSessionScreenState extends State<LogSessionScreen> {
     } else {
       await context.read<SessionsProvider>().add(session);
     }
+
+    // Fire queue lookup for any strain not yet linked to StashPass.
+    // Covers pre-existing strains (added before queue feature) and strains
+    // where admin added the curated version independently.
+    if (!widget.isEditing && resolvedStrain != null && resolvedStrain.stashpassStrainId == null && mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      final provider   = context.read<StrainsProvider>();
+      _queueSubmit(resolvedStrain, messenger, provider);
+    }
+
     if (mounted) context.pop();
+  }
+
+  void _queueSubmit(
+    Strain strain,
+    ScaffoldMessengerState messenger,
+    StrainsProvider provider,
+  ) {
+    Future.microtask(() async {
+      try {
+        final res = await http
+            .post(
+              Uri.parse('$kCirclesApiBase/queue/strains'),
+              headers: const {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'name': strain.name,
+                if (strain.strainType != null) 'type': strain.strainType,
+                'device_id': DeviceIdService.deviceId,
+              }),
+            )
+            .timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          if (data['status'] == 'exists') {
+            final sid = data['strain_id'] as String?;
+            if (sid != null) {
+              await provider.update(strain.copyWith(stashpassStrainId: sid));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Matched to StashPass database')),
+              );
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[Queue] Submit failed: $e');
+      }
+    });
   }
 
   Future<void> _delete() async {

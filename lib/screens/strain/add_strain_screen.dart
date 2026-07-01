@@ -145,7 +145,7 @@ class _AddStrainScreenState extends State<AddStrainScreen> {
               headers: const {'Content-Type': 'application/json'},
               body: jsonEncode({
                 'name': strain.name,
-                'type': strain.strainType,
+                if (strain.strainType != null) 'type': strain.strainType,
                 'device_id': DeviceIdService.deviceId,
               }),
             )
