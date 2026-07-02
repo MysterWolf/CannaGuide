@@ -15,7 +15,7 @@ and tracking effects supports that goal; it is not the goal itself. Every featur
 should ask: *does this teach the user something?* Tracker features that don't teach do not
 belong in this app.
 
-**Current version:** 1.9.8+1  
+**Current version:** 1.9.9+1  
 **Package:** `com.mysterwolf.cannaguide`  
 **Repo:** https://github.com/MysterWolf/CannaGuide (branch: master)  
 **APK output:** `build/app/outputs/flutter-apk/app-release.apk`
@@ -307,6 +307,22 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 
 ## Changelog
 
+### v1.9.9 — Per-device strain scoping + dispensaries auto-sync (2026-07-02)
+
+**Dispensaries auto-sync on launch** (`discover_screen.dart`): `_DispensariesTabState` now has `initState()` with a `static bool _hasAutoSynced = false` flag — mirrors the strains tab pattern. Operators load automatically on first Discover visit without requiring a manual pull-to-refresh. Root cause of original Discover tab being broken: this `initState()` was missing entirely.
+
+**Per-device strain scoping — server-side** (`stashpass-api`): `GET /strains?device_id=X` now filters using `strain_queue.device_ids @> '["X"]'::jsonb`. Only returns strains where that device's UUID is recorded in a published queue row. No `device_id` param → admin context → returns all. The `exists` branch in `POST /queue/strains` records the submitting device's UUID: UPDATEs the existing published queue row to append the device_id; if no published row exists (admin-added strain with no queue history), INSERTs a new published row so the device_id is captured.
+
+**Queue submission on new session save** (`log_session_screen.dart`): after saving a new session for a strain with no `stashpassStrainId`, fires `_queueSubmit()` as a `Future.microtask`. Same non-blocking pattern as AddStrainScreen. `resolvedStrain` is captured before `context.pop()` so the reference stays valid after screen unmount.
+
+**Null strain_type fix** (all queue submit sites): `jsonEncode({'type': null})` produces `"type":null`, which Zod's `z.string().optional()` rejects — it accepts `undefined`/missing only, not JSON `null`. All submit sites now use Dart collection-if: `if (strain.strainType != null) 'type': strain.strainType` to omit the key entirely when the strain has no type.
+
+**Catch-up sweep removed**: an earlier iteration added a sweep that auto-submitted every local strain with no `stashpassStrainId` on every refresh. This caused strains that were in a device's local library from before the queue feature to get that device's UUID registered server-side — making them appear in sync on that device even if the user had only added them on a different device. Removed in commit `befc5be`. Queue submission is now explicit user-action only (AddStrainScreen + LogSessionScreen).
+
+**Known device UUIDs** (for debugging `strain_queue.device_ids`):
+- Pixel (serial 22081JEGR00391): `7f2ccd34-e33a-4a39-a277-b9faa97d4b32`
+- Samsung S8+ (serial 98899a374156474a50): `363dd4ed-74df-4fd7-ae3c-f05eaaeb6012`
+
 ### v1.9.8 — StashPass strain discovery queue client (2026-06-22)
 
 **DeviceIdService** (`lib/services/device_id_service.dart`): static service that generates and persists an anonymous UUID device identity on first launch. Key: `stashpass_device_id` in SharedPreferences. Initialized with `await DeviceIdService.init()` in `main.dart` before `runApp()`, after DB and NotificationService. Static `deviceId` getter available anywhere after init.
@@ -316,7 +332,7 @@ The same file is bundled as `assets/cannaguide_backup.db` for first-launch migra
 - `status: 'queued'` → silent, no UI change
 - Network failure/timeout → silent, `debugPrint` only. Local save is never blocked.
 
-**device_id on sync** (`lib/screens/discover/discover_screen.dart`): `GET /strains` call now passes `?device_id=${DeviceIdService.deviceId}`. Server accepts and ignores it for now (no per-device scoping table yet); presence enables future logging/analytics without a client change.
+**device_id on sync** (`lib/screens/discover/discover_screen.dart`): `GET /strains` call passes `?device_id=${DeviceIdService.deviceId}`. Server-side per-device filtering implemented in v1.9.9.
 
 ### v1.9.7 — Dominance field (2026-06-22)
 
