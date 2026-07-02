@@ -266,48 +266,6 @@ class _StrainsTabState extends State<_StrainsTab> {
     }
 
     if (mounted) await context.read<StrainsProvider>().load();
-
-    // Catch-up sweep: submit any local strain that has never been submitted to
-    // the discovery queue (stashpassStrainId == null). Runs every refresh until
-    // all local strains are resolved. Silently links if admin has already
-    // published a match; otherwise adds to the queue for future enrichment.
-    if (mounted) {
-      final provider = context.read<StrainsProvider>();
-      for (final s in provider.strains) {
-        if (s.stashpassStrainId == null) {
-          _catchUpQueueSubmit(s, provider);
-        }
-      }
-    }
-  }
-
-  void _catchUpQueueSubmit(Strain strain, StrainsProvider provider) {
-    Future.microtask(() async {
-      try {
-        final res = await http
-            .post(
-              Uri.parse('$kCirclesApiBase/queue/strains'),
-              headers: const {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'name': strain.name,
-                if (strain.strainType != null) 'type': strain.strainType,
-                'device_id': DeviceIdService.deviceId,
-              }),
-            )
-            .timeout(const Duration(seconds: 10));
-        if (res.statusCode == 200 || res.statusCode == 201) {
-          final data = jsonDecode(res.body) as Map<String, dynamic>;
-          if (data['status'] == 'exists') {
-            final sid = data['strain_id'] as String?;
-            if (sid != null) {
-              await provider.update(strain.copyWith(stashpassStrainId: sid));
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('[Queue] Catch-up submit failed: $e');
-      }
-    });
   }
 
   // Normalize a strain name for fuzzy matching: lowercase, strip punctuation, collapse spaces.
