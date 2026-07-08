@@ -220,17 +220,32 @@ Display name and avatar are owned by `CirclesProvider.profile` — Settings scre
 
 3-step merge logic (v1.9.5+):
 1. Clears `StrainProfilesProvider` in-memory cache
-2. Calls `GET /strains`, snapshots local strains once before loop
-3. For each API strain:
-   - **Step 1 — linked row** (`stashpassStrainId` match): updates `name`/`strainType` from API only; all user fields (`brand`, `notes`, `category`, `dispensaryId`, `rating`, `sessions`, `createdAt`) left untouched. Counts as changed if name or type actually differed.
-   - **Step 2 — no linked row**: attempts fuzzy match on unlinked local rows (`stashpassStrainId IS NULL`). Normalize: lowercase + strip punctuation + collapse whitespace; require exact normalized name AND exact type. Match → set `stashpassStrainId`, merge API fields, leave user fields. Each local row can only be claimed once per refresh cycle (`fuzzyClaimedIds` guard). No match → INSERT new row with `source='stashpass'`.
+2. Collects all local `stashpassStrainId` values → appends as `&linked_ids=id1,id2,...`
+3. Calls `GET /strains?device_id=${DeviceIdService.deviceId}&linked_ids=...`
+   - `device_id` scope: returns strains where that device's UUID is in a published queue entry (discovery)
+   - `linked_ids`: also returns any published strain by ID, regardless of device scope (update propagation — ensures name/type changes reach devices that already have the strain locally)
+4. Snapshots local strains once before loop; for each API strain:
+   - **Step 1 — linked row** (`stashpassStrainId` match): updates `name`/`strainType`/`dominance` from API only; all user fields (`brand`, `notes`, `category`, `dispensaryId`, `rating`, `sessions`, `createdAt`) left untouched. Counts as changed if any API-owned field actually differed.
+   - **Step 2 — no linked row**: attempts fuzzy match on unlinked local rows (`stashpassStrainId IS NULL`). Normalize: lowercase + strip punctuation + collapse whitespace; require exact normalized name AND `_typeCompatible()`. Match → set `stashpassStrainId`, merge API fields, leave user fields. Each local row claimable only once per refresh cycle (`fuzzyClaimedIds` guard). No match → INSERT new row with `source='stashpass'`.
    - Upserts curated profile into `StrainProfilesProvider`
-4. Shows "X strains updated from StashPass" toast if any rows changed or were newly linked
-5. Reloads strain list from DB
+5. Shows "X strains updated from StashPass" toast if any rows changed or were newly linked
+6. Reloads strain list from DB
 
 **Merge rules** (enforced strictly):
-- API owns: `name`, `strainType`, `stashpassStrainId`
+- API owns: `name`, `strainType`, `dominance`, `stashpassStrainId`
 - User owns (never overwrite): `brand`, `notes`, `category`, `dispensaryId`, `thcPct`, `cbdPct`, `terpeneProfile`, `cannabinoidProfile`, `description`, `source`, `sourceType`, `createdAt`
+
+### Queue Client
+
+New strains and sessions trigger a non-blocking queue submission (`Future.microtask`) to `POST /queue/strains` with `{ name, type?, device_id }`. This registers the device's UUID server-side so the strain appears in that device's future syncs.
+
+- **AddStrainScreen**: fires after `StrainsProvider.add()` for new strains with no existing `stashpassStrainId`
+- **LogSessionScreen**: fires after session save for unlinked strains (no `stashpassStrainId`)
+- **Response `status: 'exists'`** → links local row via `provider.update(strain.copyWith(stashpassStrainId: sid))` + SnackBar "Matched to StashPass database"
+- **Response `status: 'queued'`** → silent (strain is pending admin review)
+- **Network failure** → silent, `debugPrint` only; local save is never blocked
+
+**Null type guard**: both submit sites use Dart collection-if `if (strain.strainType != null) 'type': strain.strainType` — omits the key entirely when null, because Zod's `z.string().optional()` rejects JSON `null`.
 
 Profile data goes into `strain_profiles` table (keyed UNIQUE on `strain_id`). On `StrainDetailScreen`, when a profile exists, a "Curated Intelligence" section is shown with terpenes, effects, flavors, use cases, cannabinoid ranges, cautions, and best method.
 
@@ -512,5 +527,7 @@ After this fix, pull-to-refresh on the Strains tab writes real `StrainProfile` r
 | 2 | Log session flow — full LogSessionScreen | **Done 2026-06-13** |
 | 3 | AI effect profile — Claude integration, ProfileScreen | Planned |
 | 4 | Circles — sqflite data layer, full 4-screen feature | **Done 2026-06-13** |
-| 5 | StashPass integration — wallet, check-in, operator profiles | Planned |
+| 5 | StashPass integration — strain sync, enrichment, dispensary profiles | **Substantially live (v1.9.x)** |
+| 5a | StashPass — strain discovery queue, per-device scoping, linked_ids propagation | **Done 2026-07-04** |
+| 5b | StashPass — loyalty wallet, points, check-in | Planned |
 | 6 | Operator theming — brand colors for premium config | Planned |
