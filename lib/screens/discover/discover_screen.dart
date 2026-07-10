@@ -133,16 +133,24 @@ class _StrainsTabState extends State<_StrainsTab> {
     if (!mounted) return;
     context.read<StrainProfilesProvider>().clearCache();
 
+    // Include already-linked strain IDs so the API returns their latest name/type
+    // even if this device isn't in their discovery scope.
+    final strainsProvider = context.read<StrainsProvider>();
+    final knownIds = strainsProvider.strains
+        .where((s) => s.stashpassStrainId != null)
+        .map((s) => s.stashpassStrainId!)
+        .join(',');
+    final url = '$kCirclesApiBase/strains?device_id=${DeviceIdService.deviceId}'
+        '${knownIds.isNotEmpty ? '&linked_ids=$knownIds' : ''}';
+
     try {
       final res = await http
-          .get(Uri.parse('$kCirclesApiBase/strains?device_id=${DeviceIdService.deviceId}'))
+          .get(Uri.parse(url))
           .timeout(const Duration(seconds: 15));
       if (res.statusCode != 200 || !mounted) return;
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final apiStrains = (data['strains'] as List?) ?? [];
-
-      final strainsProvider = context.read<StrainsProvider>();
 
       // Snapshot local strains once; the provider reloads inside add/update
       // but we work off this snapshot to keep the loop deterministic.
